@@ -52,8 +52,8 @@
       title: 'Remada baixa', hl: ['arm'],
       props: [{ k: 'seat', x: 50, y: 130, w: 50 }, { k: 'block', x: 140, y: 124, w: 8, h: 26 }, { k: 'cable', from: [150, 112], to: 'hN' }, { k: 'handle', at: 'hN' }],
       poses: [
-        P({ hip: [80, 126], torso: 4, aN: [86, 88], aF: [84, 86], fN: [140, 138], fF: [138, 140] }),
-        P({ hip: [80, 126], torso: -6, aN: [-40, 88], aF: [-44, 86], fN: [140, 138], fF: [138, 140] }),
+        P({ hip: [80, 126], torso: 4, aN: [86, 88], aF: [84, 86], fN: [138, 140], fF: [136, 142], ftN: 172, ftF: 172 }),
+        P({ hip: [80, 126], torso: -6, aN: [-40, 88], aF: [-44, 86], fN: [138, 140], fF: [136, 142], ftN: 172, ftF: 172 }),
       ],
       tips: ['Coluna reta: não balance o tronco para puxar.', 'Leve os cotovelos para trás, rente ao corpo.', 'Aperte as escápulas no final e volte devagar.'],
     },
@@ -161,19 +161,19 @@
     },
     legPress: {
       title: 'Leg press', hl: ['leg'],
-      props: [{ k: 'beam', a: [76, 132], b: [36, 92], w: 7 }, { k: 'rail', a: [96, 140], b: [168, 68] }, { k: 'platform', at: 'ankN' }],
+      props: [{ k: 'beam', a: [76, 132], b: [36, 92], w: 7 }, { k: 'rail', a: [92, 92], b: [150, 34] }, { k: 'platform', at: 'ankN' }],
       poses: [
-        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [104, 96], fF: [102, 98], kN: -1, kF: -1, ftN: 225, ftF: 225 }),
-        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [120, 80], fF: [118, 82], kN: -1, kF: -1, ftN: 225, ftF: 225 }),
+        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [86, 76], fF: [84, 78], kN: -1, kF: -1, ftN: 225, ftF: 225 }),
+        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [96, 66], fF: [94, 68], kN: -1, kF: -1, ftN: 225, ftF: 225 }),
       ],
       tips: ['Lombar sempre encostada no banco.', 'Desça até onde não tirar o quadril do encosto.', 'Não trave os joelhos no alto.'],
     },
     legPressUni: {
       title: 'Leg press unilateral', hl: ['leg'],
-      props: [{ k: 'beam', a: [76, 132], b: [36, 92], w: 7 }, { k: 'rail', a: [96, 140], b: [168, 68] }, { k: 'platform', at: 'ankN' }],
+      props: [{ k: 'beam', a: [76, 132], b: [36, 92], w: 7 }, { k: 'rail', a: [92, 92], b: [150, 34] }, { k: 'platform', at: 'ankN' }],
       poses: [
-        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [104, 96], fF: [100, 148], kN: -1, kF: -1, ftN: 225 }),
-        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [120, 80], fF: [100, 148], kN: -1, kF: -1, ftN: 225 }),
+        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [86, 76], fF: [100, 148], kN: -1, kF: -1, ftN: 225 }),
+        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [96, 66], fF: [100, 148], kN: -1, kF: -1, ftN: 225 }),
       ],
       tips: ['Comece pela perna esquerda, a mais fraca.', 'Faça as mesmas repetições com a direita.', 'Lombar encostada e joelho alinhado com o pé.'],
     },
