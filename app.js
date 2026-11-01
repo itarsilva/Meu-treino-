@@ -15,6 +15,67 @@ const DEFAULT_ROUTINES = [
   { id: uid(), name: 'Treino C — Pernas e Ombros', exercises: ['Agachamento livre', 'Leg press', 'Cadeira extensora', 'Mesa flexora', 'Desenvolvimento', 'Elevação lateral'] },
 ];
 
+/* ---------- Frases de incentivo ---------- */
+const DAILY_PHRASES = [
+  'Músculo se constrói com constância, não com pressa.',
+  'Cada série conta. Hoje é mais um tijolo.',
+  'O treino de hoje é o físico de daqui a seis meses.',
+  'Disciplina é fazer mesmo quando a vontade não aparece.',
+  'Você não precisa ser extremo, só precisa ser consistente.',
+  'Progresso pequeno ainda é progresso.',
+  'Mais 1 repetição ou mais 1 kg. É assim que se cresce.',
+  'Quem treina com regularidade sempre chega lá.',
+  'Comer bem e dormir bem também é treinar.',
+  'O corpo muda devagar. Continue aparecendo.',
+  'Você está construindo um hábito, não só um corpo.',
+  'Treino feito é melhor que treino perfeito.',
+  'A barra não fica mais leve. Você fica mais forte.',
+  'Foco na técnica. A carga vem depois.',
+  'Seu único adversário é o você da semana passada.',
+  'Cansado? Vá mesmo assim. Depois agradece.',
+  'Ganhar massa é paciência com intensidade.',
+  'Grandes resultados nascem de dias comuns bem feitos.',
+  'Sem desculpas hoje. Só mais um treino.',
+  'Proteína no prato, carga na barra, sono em dia.',
+  'Quem anota, evolui. Continue registrando.',
+  'Lembre por que você começou.',
+  'Forte não se nasce. Forte se constrói.',
+  'Um dia de cada vez, uma série de cada vez.',
+];
+
+const FINISH_PHRASES = [
+  'Treino concluído! Mais um passo rumo ao seu objetivo.',
+  'Mandou bem! Agora é comer e descansar para crescer.',
+  'Feito! A constância está do seu lado.',
+  'Missão cumprida. O músculo agradece.',
+  'Excelente! Hoje você venceu a preguiça.',
+  'Treino no bolso. Bora bater a meta da semana!',
+];
+
+const GOAL_PHRASES = [
+  'Meta semanal de treinos batida! Que semana!',
+  'Você fechou a meta de treinos da semana. Orgulho!',
+];
+
+const pick = (list) => list[Math.floor(Math.random() * list.length)];
+
+function phraseOfDay() {
+  const d = new Date();
+  const day = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 864e5);
+  return DAILY_PHRASES[day % DAILY_PHRASES.length];
+}
+
+/** Maior carga já registrada num exercício (treinos salvos). */
+function bestKg(name) {
+  const key = name.trim().toLowerCase();
+  let best = 0;
+  state.workouts.forEach((w) => w.exercises.forEach((e) => {
+    if (e.name.trim().toLowerCase() !== key) return;
+    e.sets.forEach((s) => { if (s.done && num(s.kg) > best) best = num(s.kg); });
+  }));
+  return best;
+}
+
 const ROUTINE_COLORS = ['var(--pink)', 'var(--green)', 'var(--cyan)', 'var(--yellow)'];
 
 /* ---------- Ícones (traço, estilo SF Symbols) ---------- */
@@ -202,6 +263,11 @@ function viewResumo() {
       </div>
     </div>
     <p class="tiny muted" style="margin:-4px 4px 0">Metas desta semana · ajuste em Rotinas</p>
+
+    <div class="card quote">
+      <p class="eyebrow c-yellow">Frase do dia</p>
+      <p class="quote-text">${esc(phraseOfDay())}</p>
+    </div>
 
     <h2 class="section-title">Começar treino</h2>
     <div class="list">
@@ -465,6 +531,9 @@ function finishWorkout() {
   tab = 'historico';
   render();
   window.scrollTo(0, 0);
+  const since = startOfWeek();
+  const weekCount = state.workouts.filter((w) => new Date(w.date) >= since).length;
+  toast(weekCount === state.goals.workouts ? pick(GOAL_PHRASES) : pick(FINISH_PHRASES), 4000);
 }
 
 const actions = {
@@ -497,7 +566,17 @@ const actions = {
     const set = state.current.exercises[+el.dataset.ei].sets[+el.dataset.si];
     set.done = !set.done;
     save(); render();
-    if (set.done) { startTimer(); if (navigator.vibrate) navigator.vibrate(15); }
+    if (set.done) {
+      startTimer();
+      if (navigator.vibrate) navigator.vibrate(15);
+      const ex = state.current.exercises[+el.dataset.ei];
+      const prev = bestKg(ex.name);
+      const kg = num(set.kg);
+      const firstToday = ex.sets.filter((x) => x.done && num(x.kg) >= kg).length === 1;
+      if (prev > 0 && kg > prev && num(set.reps) > 0 && firstToday) {
+        toast(`Novo recorde no ${ex.name}: ${fmtNum(kg)} kg! Você está mais forte.`, 4000);
+      }
+    }
   },
   finish: finishWorkout,
   cancel: async () => {
@@ -598,13 +677,13 @@ $sheet.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$sheet.hidden) closeSheet('cancel'); });
 
 let toastId = null;
-function toast(msg) {
+function toast(msg, ms = 2800) {
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.hidden = false;
   requestAnimationFrame(() => el.classList.add('show'));
   clearTimeout(toastId);
-  toastId = setTimeout(() => { el.classList.remove('show'); setTimeout(() => { el.hidden = true; }, 250); }, 2800);
+  toastId = setTimeout(() => { el.classList.remove('show'); setTimeout(() => { el.hidden = true; }, 250); }, ms);
 }
 
 /* ---------- Timer de descanso ---------- */
