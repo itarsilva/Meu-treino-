@@ -68,10 +68,10 @@
     },
     facePull: {
       title: 'Face pull', hl: ['arm'],
-      props: [{ k: 'cableF', from: [100, 34], to: 'hands' }],
+      props: [{ k: 'cable', from: [184, 26], to: 'hN' }, { k: 'handle', at: 'hN' }],
       poses: [
-        F({ arm: [84, 0.35, 86, 0.3] }),
-        F({ arm: [92, 1, 178, 1] }),
+        P({ torso: -4, aN: [92, 92, 1, 1], aF: [90, 90, 1, 1], fN: [108, 150], fF: [94, 150] }),
+        P({ torso: -4, aN: [96, 182, 0.18, 1], aF: [94, 180, 0.18, 1], fN: [108, 150], fF: [94, 150] }),
       ],
       tips: ['Polia na altura do rosto, corda com as duas mãos.', 'Puxe abrindo os cotovelos e leve as mãos ao lado das orelhas.', 'Ótimo para os ombros que rodam para dentro.'],
     },
@@ -163,8 +163,8 @@
       title: 'Leg press', hl: ['leg'],
       props: [{ k: 'beam', a: [76, 132], b: [36, 92], w: 7 }, { k: 'rail', a: [96, 140], b: [168, 68] }, { k: 'platform', at: 'ankN' }],
       poses: [
-        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [104, 96], fF: [102, 98], kN: -1, kF: -1 }),
-        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [120, 80], fF: [118, 82], kN: -1, kF: -1 }),
+        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [104, 96], fF: [102, 98], kN: -1, kF: -1, ftN: 225, ftF: 225 }),
+        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [120, 80], fF: [118, 82], kN: -1, kF: -1, ftN: 225, ftF: 225 }),
       ],
       tips: ['Lombar sempre encostada no banco.', 'Desça até onde não tirar o quadril do encosto.', 'Não trave os joelhos no alto.'],
     },
@@ -172,8 +172,8 @@
       title: 'Leg press unilateral', hl: ['leg'],
       props: [{ k: 'beam', a: [76, 132], b: [36, 92], w: 7 }, { k: 'rail', a: [96, 140], b: [168, 68] }, { k: 'platform', at: 'ankN' }],
       poses: [
-        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [104, 96], fF: [100, 148], kN: -1, kF: -1 }),
-        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [120, 80], fF: [100, 148], kN: -1, kF: -1 }),
+        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [104, 96], fF: [100, 148], kN: -1, kF: -1, ftN: 225 }),
+        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [120, 80], fF: [100, 148], kN: -1, kF: -1, ftN: 225 }),
       ],
       tips: ['Comece pela perna esquerda, a mais fraca.', 'Faça as mesmas repetições com a direita.', 'Lombar encostada e joelho alinhado com o pé.'],
     },
@@ -214,7 +214,7 @@
       tips: ['Joelho alinhado com o eixo da máquina.', 'Dobre os joelhos levando o calcanhar para baixo do banco.', 'Volte devagar.'],
     },
     legCurlLying: {
-      title: 'Mesa flexora', hl: ['leg'],
+      title: 'Mesa flexora', hl: ['leg'], faceDown: true,
       props: [{ k: 'beam', a: [44, 126], b: [132, 126], w: 7 }, { k: 'leg', a: [60, 129], b: [60, 150] }, { k: 'leg', a: [118, 129], b: [118, 150] }, { k: 'pad', at: 'ankN', r: 5, dy: -5 }],
       poses: [
         P({ hip: [100, 118], torso: -90, lN: [90, 90], lF: [90, 90], aN: [8, 60], aF: [6, 58] }),
@@ -271,7 +271,7 @@
       tips: ['Lombar colada no chão o tempo todo.', 'Estique um braço e a perna oposta, devagar.', 'Volte e troque o lado. Respire saindo o ar.'],
     },
     birddog: {
-      title: 'Bird dog', hl: ['arm', 'leg', 'torso'],
+      title: 'Bird dog', hl: ['arm', 'leg', 'torso'], faceDown: true,
       props: [],
       poses: [
         P({ hip: [124, 118], torso: -70, aN: [0, 0], aF: [0, 0], lN: [0, 90], lF: [0, 90], ftN: 90, ftF: 90 }),
@@ -301,7 +301,7 @@
     pulldown: ['hN', 'Puxe para baixo', 'Suba devagar'],
     rowSeated: ['hN', 'Puxe para trás', 'Volte devagar'],
     rowBent: ['hN', 'Puxe para cima', 'Desça devagar'],
-    facePull: ['hands', 'Puxe e abra', 'Volte devagar'],
+    facePull: ['hN', 'Puxe até o rosto', 'Volte devagar'],
     reverseFly: ['hands', 'Abra os braços', 'Feche devagar'],
     fly: ['hands', 'Feche os braços', 'Abra devagar'],
     curl: ['hN', 'Suba', 'Desça devagar'],
@@ -402,8 +402,8 @@
         const tgt = typeof p['h' + s] === 'string' ? add(j[p['h' + s]] || p.hip, p['ho' + s] || [0, 0]) : p['h' + s];
         [j['e' + s], j['h' + s]] = ik(j.sh, tgt, L.ua, L.fa, p['e' + s]);
       } else {
-        j['e' + s] = add(j.sh, dir(ang[0]), L.ua);
-        j['h' + s] = add(j['e' + s], dir(ang[1]), L.fa);
+        j['e' + s] = add(j.sh, dir(ang[0]), L.ua * (ang[2] ?? 1));
+        j['h' + s] = add(j['e' + s], dir(ang[1]), L.fa * (ang[3] ?? 1));
       }
       if (p['f' + s]) {
         [j['k' + s], j['ank' + s]] = ik(p.hip, p['f' + s], L.th, L.sh, p['k' + s]);
@@ -562,8 +562,11 @@
           case 'cable': { const t = ref(pr.to); line(pr.from, t, C.cable, 1.6); dot(pr.from, 3.5, C.cable); break; }
           case 'pad': { const p = ref(pr.at); dot([p[0] + (pr.dx || 0), p[1] + (pr.dy || 0)], pr.r, C.equip); break; }
           case 'platform': {
-            const p = j.ankN, d = [Math.cos(Math.PI / 4), Math.sin(Math.PI / 4)];
-            line([p[0] - d[0] * 15 + 3, p[1] - d[1] * 15 + 3], [p[0] + d[0] * 15 + 3, p[1] + d[1] * 15 + 3], C.equip, 6);
+            // plataforma paralela à sola, logo atrás dela (no sentido do trilho)
+            const mid = [(j.ankN[0] + j.toeN[0]) / 2, (j.ankN[1] + j.toeN[1]) / 2];
+            const c = [mid[0] + 5 * Math.SQRT1_2, mid[1] - 5 * Math.SQRT1_2];
+            const d = [Math.SQRT1_2, Math.SQRT1_2];
+            line([c[0] - d[0] * 16, c[1] - d[1] * 16], [c[0] + d[0] * 16, c[1] + d[1] * 16], C.equip, 6);
             break;
           }
           default: break;
@@ -589,6 +592,14 @@
       // tronco e cabeça
       line(j.hip, j.sh, hl('torso') ? C.hl : C.body, LW + 1);
       dot(j.head, L.head, C.body);
+      {
+        const tv = [j.sh[0] - j.hip[0], j.sh[1] - j.hip[1]], tl = Math.hypot(tv[0], tv[1]) || 1;
+        let f = [-tv[1] / tl, tv[0] / tl]; // perpendicular ao tronco, para frente
+        if (pat.faceDown) f = [-f[0], -f[1]];
+        const nose = [j.head[0] + f[0] * (L.head + 2.5), j.head[1] + f[1] * (L.head + 2.5)];
+        line([j.head[0] + f[0] * (L.head - 2), j.head[1] + f[1] * (L.head - 2)], nose, C.body, 3.4);
+        dot([j.head[0] + f[0] * 3.8 + (tv[0] / tl) * 2, j.head[1] + f[1] * 3.8 + (tv[1] / tl) * 2], 1.4, C.back); // olho
+      }
       // membros da frente
       poly([j.hip, j.kN, j.ankN, j.toeN], hl('leg') ? C.hl : C.body, LW);
       poly([j.sh, j.eN, j.hN], hl('arm') ? C.hl : C.body, LW);
@@ -610,6 +621,8 @@
       line(r.sh, l.sh, C.body, LW);
       line(r.hp, l.hp, C.body, LW);
       dot(j.head, L.head, C.body);
+      dot([j.head[0] - 3.2, j.head[1] - 1], 1.4, C.back);
+      dot([j.head[0] + 3.2, j.head[1] - 1], 1.4, C.back);
       // braços
       [r, l].forEach((sd) => poly([sd.sh, sd.e, sd.h], armC, LW));
       for (const pr of pat.props) {
@@ -653,6 +666,7 @@
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const C = colors(canvas);
+    C.back = C.back || '#000';
     const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const period = 3600;
     const t0 = performance.now();
