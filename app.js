@@ -7,11 +7,39 @@
 
 const STORAGE_KEY = 'meu-treino:v1';
 const REST_SECONDS = 90;
+const DEFAULT_GOALS = { workouts: 4, minutes: 180, sets: 60 };
 
 const DEFAULT_ROUTINES = [
   { id: uid(), name: 'Treino A — Peito e Tríceps', exercises: ['Supino reto', 'Supino inclinado com halteres', 'Crucifixo', 'Tríceps na polia', 'Tríceps francês'] },
   { id: uid(), name: 'Treino B — Costas e Bíceps', exercises: ['Puxada frontal', 'Remada curvada', 'Remada baixa', 'Rosca direta', 'Rosca martelo'] },
   { id: uid(), name: 'Treino C — Pernas e Ombros', exercises: ['Agachamento livre', 'Leg press', 'Cadeira extensora', 'Mesa flexora', 'Desenvolvimento', 'Elevação lateral'] },
+];
+
+const ROUTINE_COLORS = ['var(--pink)', 'var(--green)', 'var(--cyan)', 'var(--yellow)'];
+
+/* ---------- Ícones (traço, estilo SF Symbols) ---------- */
+const svg = (d, extra = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${d}</svg>`;
+const ICON = {
+  summary: svg('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="2"/>'),
+  history: svg('<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/>'),
+  trend: svg('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>'),
+  list: svg('<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>'),
+  dumbbell: svg('<path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/>'),
+  chevron: svg('<path d="M9 5l7 7-7 7"/>', 'width="16" height="16"'),
+  plus: svg('<path d="M12 5v14M5 12h14"/>'),
+  minus: svg('<path d="M5 12h14"/>'),
+  check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 'stroke-width="3"'),
+  trash: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>'),
+  play: svg('<path d="M7 4.5v15l12-7.5z" fill="currentColor"/>'),
+  download: svg('<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>'),
+  upload: svg('<path d="M12 20V9M7 14l5-5 5 5M5 4h14"/>'),
+};
+
+const TABS = [
+  { id: 'treino', label: 'Resumo', icon: ICON.summary },
+  { id: 'historico', label: 'Histórico', icon: ICON.history },
+  { id: 'progresso', label: 'Progresso', icon: ICON.trend },
+  { id: 'rotinas', label: 'Rotinas', icon: ICON.list },
 ];
 
 let state = load();
@@ -28,11 +56,11 @@ function load() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const data = JSON.parse(raw);
-      return { workouts: data.workouts || [], routines: data.routines || [], current: data.current || null };
+      const d = JSON.parse(raw);
+      return { workouts: d.workouts || [], routines: d.routines ?? DEFAULT_ROUTINES, current: d.current || null, goals: { ...DEFAULT_GOALS, ...d.goals } };
     }
   } catch (e) { /* sem armazenamento disponível */ }
-  return { workouts: [], routines: DEFAULT_ROUTINES, current: null };
+  return { workouts: [], routines: DEFAULT_ROUTINES, current: null, goals: { ...DEFAULT_GOALS } };
 }
 
 function save() {
@@ -46,31 +74,39 @@ const $view = document.getElementById('view');
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
-
 function num(v) {
   const n = parseFloat(String(v).replace(',', '.'));
   return Number.isFinite(n) ? n : 0;
 }
-
 function fmtNum(n) {
   return Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
 }
-
-function fmtDate(iso, opts = { weekday: 'short', day: '2-digit', month: 'short' }) {
-  return new Date(iso).toLocaleDateString('pt-BR', opts);
+function fmtDate(iso, opts = { weekday: 'short', day: 'numeric', month: 'short' }) {
+  return new Date(iso).toLocaleDateString('pt-BR', opts).replace(/\./g, '');
 }
-
+function plural(n, one, many) { return `${n} ${n === 1 ? one : many}`; }
 function minutesBetween(a, b) {
   return Math.max(1, Math.round((new Date(b) - new Date(a)) / 60000));
 }
-
-function volume(workout) {
-  return workout.exercises.reduce((sum, ex) =>
-    sum + ex.sets.filter((s) => s.done).reduce((s2, s) => s2 + num(s.kg) * num(s.reps), 0), 0);
+function clock(ms) {
+  const t = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+  const p = (x) => String(x).padStart(2, '0');
+  return h ? `${h}:${p(m)}:${p(s)}` : `${p(m)}:${p(s)}`;
 }
-
-function doneSets(workout) {
-  return workout.exercises.reduce((sum, ex) => sum + ex.sets.filter((s) => s.done).length, 0);
+function volume(w) {
+  return w.exercises.reduce((sum, ex) => sum + ex.sets.filter((s) => s.done).reduce((a, s) => a + num(s.kg) * num(s.reps), 0), 0);
+}
+function doneSets(w) {
+  return w.exercises.reduce((sum, ex) => sum + ex.sets.filter((s) => s.done).length, 0);
+}
+function startOfWeek() {
+  const d = new Date(); d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // segunda-feira
+  return d;
+}
+function todayLabel() {
+  return new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
 /** Última vez que o exercício foi feito (para mostrar como referência). */
@@ -97,128 +133,199 @@ function newExercise(name) {
   const prev = lastPerformance(name);
   const sets = prev
     ? prev.map((s) => ({ kg: s.kg, reps: s.reps, done: false }))
-    : [{ kg: '', reps: '', done: false }, { kg: '', reps: '', done: false }, { kg: '', reps: '', done: false }];
+    : Array.from({ length: 3 }, () => ({ kg: '', reps: '', done: false }));
   return { name, sets };
+}
+
+function header(title, eyebrow = todayLabel()) {
+  return `<p class="eyebrow">${esc(eyebrow)}</p><h1 class="large-title">${esc(title)}</h1>`;
+}
+
+function emptyState(icon, color, title, text) {
+  return `<div class="empty"><div class="icon-badge" style="--c:${color}">${icon}</div><h3>${title}</h3><p class="muted">${text}</p></div>`;
+}
+
+/* ---------- Anéis de atividade ---------- */
+
+function rings(values) {
+  // values: [{pct, color}] de fora para dentro
+  const size = 132, stroke = 14, gap = 3;
+  return `<svg class="rings" viewBox="0 0 ${size} ${size}" aria-hidden="true">
+    ${values.map((v, i) => {
+      const r = size / 2 - stroke / 2 - i * (stroke + gap);
+      const c = 2 * Math.PI * r;
+      const pct = Math.min(1, Math.max(0, v.pct));
+      return `<circle cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="${v.color}" stroke-opacity=".22" stroke-width="${stroke}"/>
+        ${pct > 0 ? `<circle cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="${v.color}" stroke-width="${stroke}"
+          stroke-dasharray="${(c * pct).toFixed(2)} ${c.toFixed(2)}" transform="rotate(-90 ${size / 2} ${size / 2})"/>` : ''}`;
+    }).join('')}
+  </svg>`;
 }
 
 /* ---------- Telas ---------- */
 
 function render() {
-  document.querySelectorAll('.tabbar button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  document.getElementById('tabbar').innerHTML = TABS.map((t) =>
+    `<button data-tab="${t.id}" class="${t.id === tab ? 'active' : ''}" aria-current="${t.id === tab ? 'page' : 'false'}">${t.icon}${t.label}</button>`
+  ).join('');
   const views = { treino: viewTreino, historico: viewHistorico, progresso: viewProgresso, rotinas: viewRotinas };
   $view.innerHTML = views[tab]();
 }
 
 function viewTreino() {
-  const cur = state.current;
-  if (!cur) {
-    const week = state.workouts.filter((w) => Date.now() - new Date(w.date) < 7 * 864e5).length;
-    const last = state.workouts[state.workouts.length - 1];
-    return `
-      <div class="stats">
-        <div class="stat"><strong>${state.workouts.length}</strong><span>treinos</span></div>
-        <div class="stat"><strong>${week}</strong><span>últimos 7 dias</span></div>
-        <div class="stat"><strong>${last ? fmtDate(last.date, { day: '2-digit', month: '2-digit' }) : '—'}</strong><span>último</span></div>
-      </div>
-      <h2>Começar treino</h2>
-      ${state.routines.map((r) => `
-        <div class="card row between">
-          <div class="grow">
-            <h3>${esc(r.name)}</h3>
-            <p class="muted">${r.exercises.length} exercícios</p>
-          </div>
-          <button class="primary" data-action="start" data-id="${r.id}">Iniciar</button>
-        </div>`).join('')}
-      <button class="block" data-action="start-empty">+ Treino livre (sem rotina)</button>
-    `;
-  }
+  return state.current ? viewLive() : viewResumo();
+}
+
+function viewResumo() {
+  const since = startOfWeek();
+  const week = state.workouts.filter((w) => new Date(w.date) >= since);
+  const g = state.goals;
+  const done = {
+    workouts: week.length,
+    minutes: week.reduce((a, w) => a + (w.duration || 0), 0),
+    sets: week.reduce((a, w) => a + doneSets(w), 0),
+  };
 
   return `
-    <div class="card stack">
-      <input id="w-name" value="${esc(cur.name)}" aria-label="Nome do treino" data-field="name">
-      <p class="muted">Começou às ${new Date(cur.startedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-        · ${doneSets(cur)} séries feitas · ${fmtNum(volume(cur))} kg de volume</p>
+    ${header('Resumo')}
+    <div class="card rings-card">
+      ${rings([
+        { pct: done.workouts / g.workouts, color: 'var(--pink)' },
+        { pct: done.minutes / g.minutes, color: 'var(--ring-green)' },
+        { pct: done.sets / g.sets, color: 'var(--ring-cyan)' },
+      ])}
+      <div class="ring-legend">
+        <div><div class="label">Treinos</div><div class="value c-pink">${done.workouts}/${g.workouts}</div></div>
+        <div><div class="label">Minutos</div><div class="value c-green">${done.minutes}/${g.minutes}<small> MIN</small></div></div>
+        <div><div class="label">Séries</div><div class="value c-cyan">${done.sets}/${g.sets}</div></div>
+      </div>
     </div>
+    <p class="tiny muted" style="margin:-4px 4px 0">Metas desta semana · ajuste em Rotinas</p>
+
+    <h2 class="section-title">Começar treino</h2>
+    <div class="list">
+      ${state.routines.map((r, i) => `
+        <button class="list-row" data-action="start" data-id="${r.id}">
+          <span class="icon-badge" style="--c:${ROUTINE_COLORS[i % ROUTINE_COLORS.length]}">${ICON.dumbbell}</span>
+          <span class="body">
+            <span class="title" style="display:block">${esc(r.name)}</span>
+            <span class="small muted">${plural(r.exercises.length, 'exercício', 'exercícios')}</span>
+          </span>
+          <span class="pill-btn go" aria-hidden="true">Iniciar</span>
+        </button>`).join('')}
+      <button class="list-row" data-action="start-empty">
+        <span class="icon-badge" style="--c:var(--muted)">${ICON.plus}</span>
+        <span class="body"><span class="title">Treino livre</span></span>
+        <span class="chev">${ICON.chevron}</span>
+      </button>
+    </div>
+  `;
+}
+
+function viewLive() {
+  const cur = state.current;
+  return `
+    <div class="live">
+      <input class="plain eyebrow" style="font-size:13px;color:var(--muted)" value="${esc(cur.name)}" aria-label="Nome do treino" data-field="name">
+      <div class="elapsed" id="elapsed">${clock(Date.now() - new Date(cur.startedAt))}</div>
+      <div class="live-stats">
+        <div><div class="value c-cyan">${doneSets(cur)}</div><div class="label">Séries</div></div>
+        <div><div class="value c-green">${fmtNum(volume(cur))}<small> KG</small></div><div class="label">Volume</div></div>
+        <div><div class="value c-pink">${cur.exercises.length}</div><div class="label">Exercícios</div></div>
+      </div>
+    </div>
+    <div class="spacer"></div>
 
     ${cur.exercises.map((ex, ei) => {
       const prev = lastPerformance(ex.name);
       return `
-      <div class="card">
-        <div class="row between">
-          <h3 class="grow">${esc(ex.name)}</h3>
-          <button class="small ghost danger" data-action="remove-ex" data-ei="${ei}" aria-label="Remover exercício">🗑</button>
+      <section class="card exercise">
+        <div class="exercise-head">
+          <h3>${esc(ex.name)}</h3>
+          <button class="icon-btn" data-action="remove-ex" data-ei="${ei}" aria-label="Remover exercício">${ICON.trash}</button>
         </div>
-        ${prev ? `<p class="prev">Última vez: ${prev.map((s) => `${fmtNum(num(s.kg))}kg×${num(s.reps)}`).join(' · ')}</p>` : ''}
-        <table class="sets">
-          <thead><tr><th>Série</th><th>Carga (kg)</th><th>Reps</th><th>✓</th></tr></thead>
-          <tbody>
-            ${ex.sets.map((s, si) => `
-              <tr class="${s.done ? 'done' : ''}">
-                <td>${si + 1}</td>
-                <td><input inputmode="decimal" value="${esc(s.kg)}" placeholder="0" data-ei="${ei}" data-si="${si}" data-k="kg"></td>
-                <td><input inputmode="numeric" value="${esc(s.reps)}" placeholder="0" data-ei="${ei}" data-si="${si}" data-k="reps"></td>
-                <td><button class="check ${s.done ? 'on' : ''}" data-action="toggle-set" data-ei="${ei}" data-si="${si}" aria-label="Marcar série">✓</button></td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
-        <div class="row" style="margin-top:8px">
-          <button class="small grow" data-action="add-set" data-ei="${ei}">+ Série</button>
-          <button class="small" data-action="remove-set" data-ei="${ei}" ${ex.sets.length <= 1 ? 'disabled' : ''}>− Série</button>
+        ${prev ? `<p class="last-time">Última vez · ${prev.map((s) => `${fmtNum(num(s.kg))} × ${num(s.reps)}`).join('  ')}</p>` : ''}
+        <div class="set-head"><span>#</span><span>kg</span><span>reps</span><span></span></div>
+        ${ex.sets.map((s, si) => `
+          <div class="set-row ${s.done ? 'done' : ''}">
+            <span class="n">${si + 1}</span>
+            <input inputmode="decimal" value="${esc(s.kg)}" placeholder="–" aria-label="Carga série ${si + 1}" data-ei="${ei}" data-si="${si}" data-k="kg">
+            <input inputmode="numeric" value="${esc(s.reps)}" placeholder="–" aria-label="Repetições série ${si + 1}" data-ei="${ei}" data-si="${si}" data-k="reps">
+            <button class="check ${s.done ? 'on' : ''}" data-action="toggle-set" data-ei="${ei}" data-si="${si}" aria-label="Concluir série ${si + 1}" aria-pressed="${s.done}">${ICON.check}</button>
+          </div>`).join('')}
+        <div class="set-actions">
+          <button class="pill-btn" data-action="add-set" data-ei="${ei}">+ Adicionar série</button>
+          <span class="grow"></span>
+          <button class="pill-btn minus" data-action="remove-set" data-ei="${ei}" ${ex.sets.length <= 1 ? 'disabled' : ''}>Remover</button>
         </div>
-      </div>`;
+      </section>`;
     }).join('')}
 
-    <div class="card stack">
-      <div class="row">
-        <input id="new-ex" class="grow" list="ex-list" placeholder="Adicionar exercício…">
-        <button data-action="add-ex">Adicionar</button>
-      </div>
+    <div class="card add-ex">
+      <input id="new-ex" class="grow" list="ex-list" placeholder="Adicionar exercício" autocomplete="off">
+      <button class="pill-btn go" data-action="add-ex" aria-label="Adicionar exercício">Adicionar</button>
       <datalist id="ex-list">${allExerciseNames().map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
     </div>
 
-    <button class="primary block" data-action="finish">Finalizar e salvar treino</button>
-    <p></p>
-    <button class="block danger" data-action="cancel">Descartar treino</button>
+    <div class="spacer"></div>
+    <button class="btn primary" data-action="finish">Finalizar treino</button>
+    <button class="btn text" data-action="cancel">Descartar</button>
   `;
 }
 
 function viewHistorico() {
   if (!state.workouts.length) {
-    return `<div class="empty"><div class="big">📅</div><p>Nenhum treino salvo ainda.</p><p>Finalize um treino para ele aparecer aqui.</p></div>`;
+    return header('Histórico') + emptyState(ICON.history, 'var(--pink)', 'Nenhum treino ainda', 'Finalize um treino e ele aparece aqui.');
   }
-  const list = [...state.workouts].reverse();
+  const groups = new Map();
+  [...state.workouts].reverse().forEach((w) => {
+    const key = new Date(w.date).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(w);
+  });
+
   return `
-    <h2>Histórico</h2>
-    ${list.map((w) => `
-      <details class="card">
-        <summary class="row between">
-          <div class="grow">
-            <h3>${esc(w.name)}</h3>
-            <p class="muted">${fmtDate(w.date)} · ${w.duration} min · ${doneSets(w)} séries · ${fmtNum(volume(w))} kg</p>
-          </div>
-          <span class="muted">▾</span>
-        </summary>
-        <div class="stack" style="margin-top:10px">
-          ${w.exercises.map((ex) => {
-            const sets = ex.sets.filter((s) => s.done);
-            if (!sets.length) return '';
-            return `<div><strong>${esc(ex.name)}</strong>
-              <div class="chips" style="margin-top:4px">${sets.map((s) => `<span class="chip">${fmtNum(num(s.kg))} kg × ${num(s.reps)}</span>`).join('')}</div></div>`;
-          }).join('')}
-          <button class="small danger" data-action="delete-workout" data-id="${w.id}">Excluir treino</button>
-        </div>
-      </details>`).join('')}
-    ${backupCard()}
+    ${header('Histórico', plural(state.workouts.length, 'treino', 'treinos'))}
+    ${[...groups].map(([month, list]) => `
+      <p class="section-label">${esc(month)}</p>
+      <div class="list">
+        ${list.map((w) => `
+          <details class="list-item">
+            <summary class="list-row">
+              <span class="icon-badge">${ICON.dumbbell}</span>
+              <span class="body">
+                <span class="title" style="display:block">${esc(w.name)}</span>
+                <span class="small muted">${w.duration} min · ${plural(doneSets(w), 'série', 'séries')}</span>
+              </span>
+              <span class="trailing">
+                <span class="value c-green" style="display:block">${fmtNum(volume(w))} kg</span>
+                <span class="tiny muted">${fmtDate(w.date)}</span>
+              </span>
+            </summary>
+            <div class="history-detail">
+              ${w.exercises.filter((ex) => ex.sets.some((s) => s.done)).map((ex) => `
+                <div>
+                  <div class="ex-name">${esc(ex.name)}</div>
+                  <div class="ex-sets">${ex.sets.filter((s) => s.done).map((s) => `${fmtNum(num(s.kg))} kg × ${num(s.reps)}`).join(' · ')}</div>
+                </div>`).join('')}
+              <button class="link-danger" data-action="delete-workout" data-id="${w.id}">Excluir treino</button>
+            </div>
+          </details>`).join('')}
+      </div>`).join('')}
   `;
 }
 
 function viewProgresso() {
-  const names = [...new Set(state.workouts.flatMap((w) => w.exercises.filter((e) => e.sets.some((s) => s.done)).map((e) => e.name)))]
+  const names = [...new Set(state.workouts.flatMap((w) => w.exercises.filter((e) => e.sets.some((s) => s.done && num(s.kg) > 0)).map((e) => e.name)))]
     .sort((a, b) => a.localeCompare(b, 'pt-BR'));
   if (!names.length) {
-    return `<div class="empty"><div class="big">📈</div><p>Sem dados de progresso ainda.</p><p>Registre alguns treinos para ver sua evolução.</p></div>`;
+    return header('Progresso') + emptyState(ICON.trend, 'var(--ring-green)', 'Sem dados ainda', 'Registre alguns treinos para ver sua evolução.');
   }
-  if (!progressExercise || !names.includes(progressExercise)) progressExercise = names[0];
+  if (!progressExercise || !names.includes(progressExercise)) {
+    // Começa pelo primeiro exercício do treino mais recente.
+    const recent = [...state.workouts].reverse().flatMap((w) => w.exercises.map((e) => e.name)).find((n) => names.includes(n));
+    progressExercise = recent || names[0];
+  }
 
   const points = [];
   state.workouts.forEach((w) => {
@@ -226,84 +333,103 @@ function viewProgresso() {
     if (!ex) return;
     const sets = ex.sets.filter((s) => s.done && num(s.kg) > 0);
     if (!sets.length) return;
-    const best = Math.max(...sets.map((s) => num(s.kg)));
-    // 1RM estimado (fórmula de Epley)
-    const orm = Math.max(...sets.map((s) => num(s.kg) * (1 + num(s.reps) / 30)));
-    points.push({ date: w.date, best, orm });
+    points.push({
+      date: w.date,
+      best: Math.max(...sets.map((s) => num(s.kg))),
+      orm: Math.max(...sets.map((s) => num(s.kg) * (1 + num(s.reps) / 30))), // 1RM estimado (Epley)
+      vol: sets.reduce((a, s) => a + num(s.kg) * num(s.reps), 0),
+    });
   });
 
-  const pr = points.length ? Math.max(...points.map((p) => p.best)) : 0;
-  const orm = points.length ? Math.max(...points.map((p) => p.orm)) : 0;
-  const first = points[0]?.best ?? 0;
-  const diff = pr - first;
+  const pr = Math.max(...points.map((p) => p.best));
+  const orm = Math.max(...points.map((p) => p.orm));
+  const diff = pr - points[0].best;
+  const lastVol = points[points.length - 1].vol;
 
   return `
-    <h2>Progresso</h2>
-    <select data-field="progress">
-      ${names.map((n) => `<option ${n === progressExercise ? 'selected' : ''}>${esc(n)}</option>`).join('')}
-    </select>
-    <p></p>
-    <div class="stats">
-      <div class="stat"><strong>${fmtNum(pr)}</strong><span>recorde (kg)</span></div>
-      <div class="stat"><strong>${fmtNum(orm)}</strong><span>1RM estimado</span></div>
-      <div class="stat"><strong>${diff >= 0 ? '+' : ''}${fmtNum(diff)}</strong><span>desde o início</span></div>
+    ${header('Progresso', 'Evolução de carga')}
+    <div class="chips" role="tablist">
+      ${names.map((n) => `<button class="chip ${n === progressExercise ? 'on' : ''}" data-action="pick" data-name="${esc(n)}" role="tab" aria-selected="${n === progressExercise}">${esc(n)}</button>`).join('')}
+    </div>
+    <div class="metrics">
+      <div class="metric"><div class="label">Recorde</div><div class="value c-pink">${fmtNum(pr)}<small> KG</small></div></div>
+      <div class="metric"><div class="label">1RM estimado</div><div class="value c-yellow">${fmtNum(Math.round(orm))}<small> KG</small></div></div>
+      <div class="metric"><div class="label">Desde o início</div><div class="value c-green">${diff >= 0 ? '+' : ''}${fmtNum(diff)}<small> KG</small></div></div>
+      <div class="metric"><div class="label">Volume recente</div><div class="value c-cyan">${fmtNum(lastVol)}<small> KG</small></div></div>
     </div>
     <div class="card">
-      <p class="muted">Maior carga por treino (kg)</p>
-      ${points.length >= 2 ? chart(points) : '<p class="muted">Registre esse exercício em pelo menos 2 treinos para ver o gráfico.</p>'}
+      <div class="row between">
+        <div class="label" style="font-weight:600">Maior carga</div>
+        <div class="tiny muted">${plural(points.length, 'treino', 'treinos')}</div>
+      </div>
+      ${points.length >= 2 ? chart(points) : '<p class="small muted" style="margin-top:8px">Faça esse exercício em pelo menos 2 treinos para ver o gráfico.</p>'}
     </div>
   `;
 }
 
 function chart(points) {
-  const W = 600, H = 280, P = { l: 56, r: 16, t: 16, b: 40 };
+  const W = 600, H = 300, P = { l: 8, r: 64, t: 20, b: 44 };
   const vals = points.map((p) => p.best);
   let min = Math.min(...vals), max = Math.max(...vals);
   if (min === max) { min -= 5; max += 5; }
-  const pad = (max - min) * 0.1;
+  const pad = (max - min) * 0.15;
   min = Math.max(0, min - pad); max += pad;
   const x = (i) => P.l + (i / (points.length - 1)) * (W - P.l - P.r);
   const y = (v) => P.t + (1 - (v - min) / (max - min)) * (H - P.t - P.b);
   const ticks = [0, 0.5, 1].map((t) => min + t * (max - min));
-  const path = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.best).toFixed(1)}`).join(' ');
-  const labelIdx = [...new Set([0, Math.floor((points.length - 1) / 2), points.length - 1])];
+  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.best).toFixed(1)}`).join(' ');
+  const area = `${line} L${x(points.length - 1).toFixed(1)},${H - P.b} L${x(0).toFixed(1)},${H - P.b} Z`;
+  const labelIdx = [...new Set([0, points.length - 1])];
   return `
-    <svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Gráfico de evolução de carga">
+    <svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Evolução da maior carga em ${esc(progressExercise)}">
+      <defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="stop-a"/><stop offset="1" class="stop-b"/></linearGradient></defs>
       ${ticks.map((t) => `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${y(t)}" y2="${y(t)}"/>
-        <text x="${P.l - 8}" y="${y(t) + 7}" text-anchor="end">${fmtNum(Math.round(t))}</text>`).join('')}
-      <path class="line" d="${path}"/>
+        <text x="${W - P.r + 10}" y="${y(t) + 7}">${fmtNum(Math.round(t))}</text>`).join('')}
+      <path class="area" d="${area}"/>
+      <path class="line" d="${line}"/>
       ${points.map((p, i) => `<circle class="dot" cx="${x(i)}" cy="${y(p.best)}" r="6"><title>${fmtDate(p.date)}: ${fmtNum(p.best)} kg</title></circle>`).join('')}
-      ${labelIdx.map((i) => `<text x="${x(i)}" y="${H - 10}" text-anchor="${i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'}">${fmtDate(points[i].date, { day: '2-digit', month: '2-digit' })}</text>`).join('')}
+      ${labelIdx.map((i) => `<text x="${x(i)}" y="${H - 10}" text-anchor="${i === 0 ? 'start' : 'end'}">${fmtDate(points[i].date, { day: 'numeric', month: 'short' })}</text>`).join('')}
     </svg>`;
 }
 
 function viewRotinas() {
+  const g = state.goals;
   return `
-    <h2>Minhas rotinas</h2>
-    <p class="muted">Monte seus treinos fixos (A, B, C…). Um exercício por linha.</p>
-    ${state.routines.map((r) => `
-      <div class="card stack">
-        <input value="${esc(r.name)}" data-routine="${r.id}" data-k="name" aria-label="Nome da rotina">
-        <textarea rows="${Math.max(3, r.exercises.length)}" data-routine="${r.id}" data-k="exercises" aria-label="Exercícios">${esc(r.exercises.join('\n'))}</textarea>
-        <button class="small danger" data-action="delete-routine" data-id="${r.id}">Excluir rotina</button>
+    ${header('Rotinas', 'Seus treinos fixos')}
+    ${state.routines.map((r, i) => `
+      <div class="card routine-edit">
+        <div class="row">
+          <span class="icon-badge" style="--c:${ROUTINE_COLORS[i % ROUTINE_COLORS.length]}">${ICON.dumbbell}</span>
+          <input class="plain grow" value="${esc(r.name)}" data-routine="${r.id}" data-k="name" aria-label="Nome da rotina">
+          <button class="icon-btn" data-action="delete-routine" data-id="${r.id}" aria-label="Excluir rotina">${ICON.trash}</button>
+        </div>
+        <textarea rows="${Math.max(3, r.exercises.length)}" data-routine="${r.id}" data-k="exercises" placeholder="Um exercício por linha" aria-label="Exercícios">${esc(r.exercises.join('\n'))}</textarea>
       </div>`).join('')}
-    <button class="block" data-action="add-routine">+ Nova rotina</button>
-    ${backupCard()}
-  `;
-}
+    <button class="btn tinted" data-action="add-routine">${ICON.plus} Nova rotina</button>
 
-function backupCard() {
-  return `
-    <h2>Backup</h2>
-    <div class="card stack">
-      <p class="muted">Seus dados ficam só neste aparelho. Exporte de vez em quando para não perder nada.</p>
-      <div class="row">
-        <button class="grow" data-action="export">⬇ Exportar</button>
-        <label class="btn grow" style="text-align:center">⬆ Importar
-          <input type="file" accept="application/json" data-action="import" hidden>
-        </label>
-      </div>
-    </div>`;
+    <p class="section-label">Metas semanais</p>
+    <div class="list">
+      <div class="goal-row"><label for="g-w" class="c-pink">Treinos</label><input id="g-w" inputmode="numeric" value="${g.workouts}" data-goal="workouts"></div>
+      <div class="goal-row"><label for="g-m" class="c-green">Minutos</label><input id="g-m" inputmode="numeric" value="${g.minutes}" data-goal="minutes"></div>
+      <div class="goal-row"><label for="g-s" class="c-cyan">Séries</label><input id="g-s" inputmode="numeric" value="${g.sets}" data-goal="sets"></div>
+    </div>
+
+    <p class="section-label">Dados</p>
+    <div class="list">
+      <button class="list-row" data-action="export">
+        <span class="icon-badge" style="--c:var(--cyan)">${ICON.download}</span>
+        <span class="body"><span class="title">Exportar backup</span></span>
+        <span class="chev">${ICON.chevron}</span>
+      </button>
+      <label class="list-row">
+        <span class="icon-badge" style="--c:var(--cyan)">${ICON.upload}</span>
+        <span class="body"><span class="title">Importar backup</span></span>
+        <span class="chev">${ICON.chevron}</span>
+        <input type="file" accept="application/json" data-action="import" hidden>
+      </label>
+    </div>
+    <p class="tiny muted" style="margin:0 4px">Seus dados ficam só neste aparelho. Exporte de vez em quando para não perder nada.</p>
+  `;
 }
 
 /* ---------- Ações ---------- */
@@ -322,7 +448,7 @@ function finishWorkout() {
   const cur = state.current;
   cur.exercises = cur.exercises.filter((e) => e.sets.some((s) => s.done));
   if (!cur.exercises.length) {
-    alert('Marque pelo menos uma série como feita (✓) antes de salvar.');
+    alert('Conclua pelo menos uma série antes de finalizar.');
     return;
   }
   const now = new Date().toISOString();
@@ -332,6 +458,7 @@ function finishWorkout() {
   save();
   tab = 'historico';
   render();
+  window.scrollTo(0, 0);
 }
 
 const actions = {
@@ -364,7 +491,7 @@ const actions = {
     const set = state.current.exercises[+el.dataset.ei].sets[+el.dataset.si];
     set.done = !set.done;
     save(); render();
-    if (set.done) startTimer();
+    if (set.done) { startTimer(); if (navigator.vibrate) navigator.vibrate(15); }
   },
   finish: finishWorkout,
   cancel: () => {
@@ -376,6 +503,7 @@ const actions = {
     state.workouts = state.workouts.filter((w) => w.id !== el.dataset.id);
     save(); render();
   },
+  pick: (el) => { progressExercise = el.dataset.name; render(); },
   'add-routine': () => {
     state.routines.push({ id: uid(), name: 'Nova rotina', exercises: [] });
     save(); render();
@@ -393,18 +521,21 @@ const actions = {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   },
-  'timer-add': () => { timerEnd += 15000; tickTimer(); },
+  'timer-add': () => { timerEnd += 15000; timerTotal += 15000; tickTimer(); },
   'timer-stop': () => stopTimer(),
 };
 
 /* ---------- Timer de descanso ---------- */
 
-let timerEnd = 0, timerId = null;
+let timerEnd = 0, timerTotal = 0, timerId = null;
 const $timer = document.getElementById('timer');
 const $timerValue = document.getElementById('timer-value');
+const $timerBar = document.getElementById('timer-bar');
+const RING_LEN = 2 * Math.PI * 15;
 
 function startTimer() {
-  timerEnd = Date.now() + REST_SECONDS * 1000;
+  timerTotal = REST_SECONDS * 1000;
+  timerEnd = Date.now() + timerTotal;
   $timer.classList.remove('hidden');
   clearInterval(timerId);
   timerId = setInterval(tickTimer, 250);
@@ -412,8 +543,10 @@ function startTimer() {
 }
 
 function tickTimer() {
-  const left = Math.max(0, Math.ceil((timerEnd - Date.now()) / 1000));
-  $timerValue.textContent = `${String(Math.floor(left / 60)).padStart(2, '0')}:${String(left % 60).padStart(2, '0')}`;
+  const leftMs = Math.max(0, timerEnd - Date.now());
+  const left = Math.ceil(leftMs / 1000);
+  $timerValue.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+  $timerBar.style.strokeDashoffset = (RING_LEN * (1 - leftMs / timerTotal)).toFixed(2);
   if (left === 0) {
     if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
     stopTimer();
@@ -425,6 +558,12 @@ function stopTimer() {
   timerId = null;
   $timer.classList.add('hidden');
 }
+
+// Cronômetro do treino em andamento (atualiza só o número, sem redesenhar a tela).
+setInterval(() => {
+  const el = document.getElementById('elapsed');
+  if (el && state.current) el.textContent = clock(Date.now() - new Date(state.current.startedAt));
+}, 1000);
 
 /* ---------- Eventos ---------- */
 
@@ -454,24 +593,27 @@ document.addEventListener('input', (e) => {
     if (t.dataset.k === 'name') r.name = t.value;
     else r.exercises = t.value.split('\n').map((s) => s.trim()).filter(Boolean);
     save();
+  } else if (t.dataset.goal) {
+    const v = Math.round(num(t.value));
+    if (v > 0) { state.goals[t.dataset.goal] = v; save(); }
   }
 });
 
 document.addEventListener('change', (e) => {
   const t = e.target;
-  if (t.dataset.field === 'progress') { progressExercise = t.value; render(); }
   if (t.dataset.action === 'import' && t.files[0]) {
     t.files[0].text().then((txt) => {
       try {
-        const data = JSON.parse(txt);
-        if (!Array.isArray(data.workouts)) throw new Error('formato');
-        if (!confirm(`Importar ${data.workouts.length} treinos? Isso substitui os dados atuais.`)) return;
-        state = { workouts: data.workouts, routines: data.routines || [], current: data.current || null };
+        const d = JSON.parse(txt);
+        if (!Array.isArray(d.workouts)) throw new Error('formato');
+        if (!confirm(`Importar ${plural(d.workouts.length, 'treino', 'treinos')}? Isso substitui os dados atuais.`)) return;
+        state = { workouts: d.workouts, routines: d.routines || [], current: d.current || null, goals: { ...DEFAULT_GOALS, ...d.goals } };
         save(); render();
       } catch (err) {
         alert('Arquivo inválido. Use um arquivo exportado pelo Meu Treino.');
       }
     });
+    t.value = '';
   }
 });
 

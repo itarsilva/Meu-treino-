@@ -4,12 +4,17 @@ App simples para acompanhar treinos de musculação, direto do celular.
 
 ## O que ele faz
 
+Visual limpo inspirado nos apps de fitness do iOS: fundo escuro (ou claro, conforme o sistema), títulos grandes e anéis de meta semanal.
+
+- **Resumo**: anéis com as metas da semana (treinos, minutos e séries) e atalho para começar uma rotina.
+
 - **Treino**: escolha uma rotina (A, B, C…) ou faça um treino livre. Registre carga e repetições de cada série e marque ✓ quando terminar.
   - Os campos já vêm preenchidos com o que você fez da última vez naquele exercício.
+  - Cronômetro grande do treino em andamento.
   - Ao marcar uma série, abre um **timer de descanso** de 90 s (com +15 s).
 - **Histórico**: todos os treinos salvos, com duração, séries e volume total (kg × reps).
 - **Progresso**: gráfico da maior carga por treino em cada exercício, recorde pessoal e 1RM estimado.
-- **Rotinas**: edite seus treinos fixos (um exercício por linha).
+- **Rotinas**: edite seus treinos fixos (um exercício por linha) e ajuste as metas semanais.
 - **Backup**: exporte/importe seus dados em JSON.
 
 Os dados ficam salvos **no próprio aparelho** (localStorage). Funciona offline e pode ser instalado na tela inicial.

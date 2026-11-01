@@ -5,33 +5,32 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Meu Treino</title>
   <meta name="description" content="Acompanhe seus treinos, séries, cargas e evolução.">
-  <meta name="theme-color" content="#16a34a">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon.svg">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="topbar">
-    <h1>💪 Meu Treino</h1>
-  </header>
-
   <main id="view"></main>
 
-  <div id="timer" class="timer hidden" role="status" aria-live="polite">
-    <span>Descanso</span>
-    <strong id="timer-value">01:30</strong>
-    <button data-action="timer-add">+15s</button>
-    <button data-action="timer-stop">✕</button>
+  <div id="timer" class="rest hidden" role="status" aria-live="polite">
+    <svg class="rest-ring" viewBox="0 0 36 36" aria-hidden="true">
+      <circle cx="18" cy="18" r="15" class="rest-track"/>
+      <circle cx="18" cy="18" r="15" class="rest-bar" id="timer-bar"/>
+    </svg>
+    <div class="rest-text">
+      <span>Descanso</span>
+      <strong id="timer-value">1:30</strong>
+    </div>
+    <button class="pill-btn" data-action="timer-add">+15s</button>
+    <button class="pill-btn" data-action="timer-stop">Pular</button>
   </div>
 
-  <nav class="tabbar">
-    <button data-tab="treino" class="active"><span>🏋️</span>Treino</button>
-    <button data-tab="historico"><span>📅</span>Histórico</button>
-    <button data-tab="progresso"><span>📈</span>Progresso</button>
-    <button data-tab="rotinas"><span>📋</span>Rotinas</button>
-  </nav>
+  <nav class="tabbar" id="tabbar"></nav>
 
   <script src="app.js"></script>
 </body>
