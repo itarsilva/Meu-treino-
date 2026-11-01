@@ -422,7 +422,7 @@
     const shY = p.seated ? 66 : 40, hipY = shY + L.torso;
     const j = { neck: [cx, shY - 3], head: [cx, shY - 3 - L.neck - L.head + 3], pelvis: [cx, hipY], sides: [] };
     for (const s of [1, -1]) {
-      const sh = [cx + s * 15, shY], hp = [cx + s * 8, hipY];
+      const sh = [cx + s * 11, shY + 2], hp = [cx + s * 5, hipY];
       const [ua, us, fa, fs] = p.arm, [ta, ts, sa, ss] = p.leg;
       const e = [sh[0] + s * Math.sin((ua * Math.PI) / 180) * L.ua * us, sh[1] + Math.cos((ua * Math.PI) / 180) * L.ua * us];
       const h = [e[0] + s * Math.sin((fa * Math.PI) / 180) * L.fa * fs, e[1] + Math.cos((fa * Math.PI) / 180) * L.fa * fs];
@@ -543,7 +543,8 @@
 
   /* ---------- Figura (formas cheias e arredondadas) ---------- */
 
-  const R = { torsoHip: 7.2, torsoSh: 8.4, head: 9.6, gap: 3.2, th: [6.2, 4.8], sh: [4.8, 3.5], ft: [3.3, 2.5], ua: [4.9, 3.9], fa: [3.9, 3.2] };
+  // proporções no estilo pictograma: membros finos e uniformes, tronco pouco mais largo
+  const R = { torsoHip: 5.6, torsoSh: 6.6, head: 8.6, gap: 3.6, th: [4.1, 3.7], sh: [3.7, 3.3], ft: [3.3, 2.8], ua: [3.6, 3.3], fa: [3.3, 3.0], knock: 2 };
 
   function shapes(ctx) {
     const capsule = (a, b, r1, r2, col, glow) => {
@@ -564,14 +565,18 @@
     return { capsule, limb, disc };
   }
 
-  /** Desenha só o corpo. F: { work, rest, far, glow } — cores já resolvidas. */
+  /** Desenha só o corpo, numa cor só. F: { fill, bg } — o fundo abre um contorno
+      vazado onde um membro passa na frente do outro. */
   function drawFigure(ctx, pat, pose, F, held) {
-    const { capsule, limb, disc } = shapes(ctx);
-    const hl = (part) => pat.hl.includes(part);
-    const col = (part) => (hl(part) ? F.work : F.rest);
-    const glow = (part) => (hl(part) && F.glow ? F.glow : null);
+    const { capsule, disc } = shapes(ctx);
+    const K = R.knock;
     const legR = [R.th[0], R.th[1], R.sh[1], R.ft[1]];
     const armR = [R.ua[0], R.ua[1], R.fa[1]];
+    // membro inteiro: primeiro o contorno (cor do fundo), depois o preenchimento
+    const part = (pts, radii, knock = true) => {
+      if (knock && F.bg) for (let i = 0; i < pts.length - 1; i++) capsule(pts[i], pts[i + 1], radii[i] + K, radii[i + 1] + K, F.bg);
+      for (let i = 0; i < pts.length - 1; i++) capsule(pts[i], pts[i + 1], radii[i], radii[i + 1], F.fill);
+    };
 
     if (pose.view === 'side') {
       const j = solveSide(pose);
@@ -579,33 +584,31 @@
       const td = [tv[0] / tl, tv[1] / tl];
       let f = [-td[1], td[0]];
       if (pat.faceDown) f = [-f[0], -f[1]];
-      // membros de trás
-      limb([j.hip, j.kF, j.ankF, j.toeF], legR, F.far);
-      limb([j.sh, j.eF, j.hF], armR, F.far);
+      // lado de trás
+      part([j.hip, j.kF, j.ankF, j.toeF], legR, false);
+      part([j.sh, j.eF, j.hF], armR, false);
       if (held) held(j, true);
-      // tronco e cabeça (separada do corpo)
-      capsule(j.hip, j.sh, R.torsoHip, R.torsoSh, col('torso'), glow('torso'));
-      const head = [j.sh[0] + td[0] * (R.torsoSh + R.gap + R.head) + f[0] * 1.5, j.sh[1] + td[1] * (R.torsoSh + R.gap + R.head) + f[1] * 1.5];
-      disc(head, R.head, F.rest);
-      capsule([head[0] + f[0] * 6, head[1] + f[1] * 6], [head[0] + f[0] * 10.6, head[1] + f[1] * 10.6 - td[1] * 0], 2.8, 2.2, F.rest); // nariz
-      // membros da frente
-      limb([j.hip, j.kN, j.ankN, j.toeN], legR, col('leg'), glow('leg'));
-      limb([j.sh, j.eN, j.hN], armR, col('arm'), glow('arm'));
+      // tronco e cabeça solta, um pouco à frente
+      part([j.hip, j.sh], [R.torsoHip, R.torsoSh]);
+      const hd = R.torsoSh + R.gap + R.head;
+      disc([j.sh[0] + td[0] * hd + f[0] * 2, j.sh[1] + td[1] * hd + f[1] * 2], R.head, F.fill);
+      // lado da frente
+      part([j.hip, j.kN, j.ankN, j.toeN], legR);
+      part([j.sh, j.eN, j.hN], armR);
       if (held) held(j, false);
       return j;
     }
     const j = solveFront(pose);
     const [r, l] = j.sides;
-    // pernas
-    [r, l].forEach((sd) => limb([sd.hp, sd.k, sd.a, [sd.a[0] + sd.s * 6, sd.a[1]]], legR, col('leg'), glow('leg')));
-    // tronco: ombros, quadril e coluna
-    const top = [100, r.sh[1] + 1], bot = [100, r.hp[1] - 1];
-    capsule(top, bot, 8.6, 7.4, col('torso'), glow('torso'));
-    capsule(r.sh, l.sh, 5.4, 5.4, col('torso'));
-    capsule(r.hp, l.hp, 6.2, 6.2, col('torso'));
-    disc([100, r.sh[1] - R.torsoSh - R.gap - R.head + 4], R.head, F.rest);
-    // braços
-    [r, l].forEach((sd) => limb([sd.sh, sd.e, sd.h], armR, col('arm'), glow('arm')));
+    [r, l].forEach((sd) => part([sd.hp, sd.k, sd.a, [sd.a[0] + sd.s * 5, sd.a[1]]], legR, false));
+    // tronco: um bloco arredondado dos ombros ao quadril
+    const top = [100, r.sh[1] + 3], bot = [100, r.hp[1] - 3];
+    // ombros arredondados: duas cápsulas inclinadas formam um tronco em "V" suave
+    part([[r.sh[0] - 3, r.sh[1]], bot], [4.4, 5.6], false);
+    part([[l.sh[0] + 3, l.sh[1]], bot], [4.4, 5.6], false);
+    part([top, bot], [7.2, 5.8], false);
+    disc([100, r.sh[1] - 4 - R.gap - R.head], R.head, F.fill);
+    [r, l].forEach((sd) => part([sd.sh, sd.e, sd.h], armR));
     if (held) held(j, false);
     return j;
   }
@@ -631,7 +634,7 @@
     // chão
     line([14, FLOOR + 1.5], [186, FLOOR + 1.5], C.floor, 2);
 
-    const F = { work: C.work, rest: C.rest, far: C.far, glow: C.glow };
+    const F = { fill: C.fig, bg: C.bg };
     if (pose.view === 'side') {
       const j = solveSide(pose);
       const ref = (at) => j[at] || pose.hip;
@@ -716,7 +719,7 @@
     const v = (n) => cs.getPropertyValue(n).trim();
     const lime = v('--ring-green'), card = mix(v('--surface'), lime, 0.12);
     const C = { equip: mix(card, lime, 0.28), floor: 'transparent', cable: 'transparent', weight: mix(card, lime, 0.55) };
-    const F = { work: lime, rest: lime, far: mix(card, lime, 0.45) };
+    const F = { fill: lime, bg: card };
     const pose = poseU(pat, u);
     const dpr = Math.min(3, window.devicePixelRatio || 1);
     const size = canvas.clientWidth || 64;
@@ -748,7 +751,7 @@
     const lime = v('--ring-green'), text = v('--text');
     const bg = mix(v('--surface') || '#1c1c1e', lime, 0.1);
     return {
-      bg, work: lime, glow: lime, rest: mix(bg, lime, 0.7), far: mix(bg, lime, 0.36),
+      bg, fig: lime,
       arrow: text, label2: v('--muted'),
       equip: mix(bg, text, 0.2), equipSoft: mix(bg, text, 0.1), floor: mix(bg, text, 0.18),
       cable: v('--ring-cyan'), weight: mix(bg, text, 0.42),

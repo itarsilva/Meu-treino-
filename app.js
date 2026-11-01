@@ -1008,8 +1008,7 @@ function showDemo(name) {
       ${plan ? `<p class="target" style="text-align:center">Meta · ${plan.target.sets} × ${esc(plan.target.reps)}</p>` : ''}
       <ul class="demo-tips">${pat.tips.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
       <div class="demo-legend tiny muted">
-        <span><span class="hl-swatch"></span>parte que trabalha</span>
-        <span><span class="hl-swatch arrow"></span>caminho e direção</span>
+        <span><span class="hl-swatch arrow"></span>caminho e direção do movimento</span>
       </div>
     </div>`, null, 'Fechar');
   ExAnim.play(document.getElementById('demo-canvas'), key);
