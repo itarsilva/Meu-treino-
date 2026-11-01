@@ -7,13 +7,71 @@
 
 const STORAGE_KEY = 'meu-treino:v1';
 const REST_SECONDS = 90;
-const DEFAULT_GOALS = { workouts: 4, minutes: 180, sets: 60 };
+const DEFAULT_GOALS = { workouts: 5, minutes: 300, sets: 100 };
+const PLAN_VERSION = 2;
 
-const DEFAULT_ROUTINES = [
-  { id: uid(), name: 'Treino A — Peito e Tríceps', exercises: ['Supino reto', 'Supino inclinado com halteres', 'Crucifixo', 'Tríceps na polia', 'Tríceps francês'] },
-  { id: uid(), name: 'Treino B — Costas e Bíceps', exercises: ['Puxada frontal', 'Remada curvada', 'Remada baixa', 'Rosca direta', 'Rosca martelo'] },
-  { id: uid(), name: 'Treino C — Pernas e Ombros', exercises: ['Agachamento livre', 'Leg press', 'Cadeira extensora', 'Mesa flexora', 'Desenvolvimento', 'Elevação lateral'] },
+/* Plano de hipertrofia de 5 dias, montado a partir da avaliação física
+   (dores em costas/quadril, hipercifose, ombros rodados para dentro,
+   flexibilidade abaixo da média, coxa esquerda menor).
+   Formato de cada linha: "Exercício | séries×repetições". */
+const WARMUP = 'Aquecimento (8 min): gato-camelo e rotação torácica, alongamento de posteriores e flexores do quadril, rotação externa de ombro com elástico.';
+const PLAN_ROUTINES = () => [
+  { id: uid(), name: 'Dia 1 — Costas e postura', note: WARMUP, exercises: [
+    'Puxada frontal aberta | 3×10-12',
+    'Remada apoiada no banco inclinado | 3×10-12',
+    'Remada baixa com triângulo | 3×10-12',
+    'Face pull na polia | 3×15',
+    'Crucifixo inverso | 3×15',
+    'Rosca direta | 3×10-12',
+    'Dead bug | 3×10',
+  ] },
+  { id: uid(), name: 'Dia 2 — Pernas (quadríceps)', note: WARMUP + ' Sem agachamento com barra nas costas por enquanto, para poupar a coluna.', exercises: [
+    'Leg press 45° | 4×10-12',
+    'Agachamento búlgaro (começar pela esquerda) | 3×10',
+    'Cadeira extensora | 3×12-15',
+    'Mesa flexora | 3×12',
+    'Panturrilha sentado | 4×15',
+    'Prancha lateral (segundos) | 3×30',
+  ] },
+  { id: uid(), name: 'Dia 3 — Peito e ombros', note: WARMUP + ' Ombros para trás e para baixo em todos os empurrões.', exercises: [
+    'Supino inclinado com halteres | 4×8-12',
+    'Supino reto na máquina | 3×10-12',
+    'Crucifixo na polia | 3×12-15',
+    'Desenvolvimento sentado com halteres | 3×10-12',
+    'Elevação lateral | 3×12-15',
+    'Tríceps na polia | 3×12',
+    'Face pull na polia | 2×15',
+  ] },
+  { id: uid(), name: 'Dia 4 — Pernas (posterior e glúteo)', note: WARMUP + ' No stiff, carga leve e coluna neutra; pare se doer a lombar.', exercises: [
+    'Elevação pélvica | 4×10-12',
+    'Stiff com halteres | 3×10',
+    'Cadeira flexora | 3×12',
+    'Leg press unilateral (começar pela esquerda) | 3×12',
+    'Cadeira abdutora | 3×15',
+    'Panturrilha em pé | 4×12-15',
+    'Pallof press | 3×12',
+  ] },
+  { id: uid(), name: 'Dia 5 — Costas, peito e braços', note: WARMUP, exercises: [
+    'Puxada com triângulo | 3×10-12',
+    'Remada unilateral com halter | 3×10-12',
+    'Supino inclinado na máquina | 3×10',
+    'Rotação externa com elástico | 3×15',
+    'Rosca martelo | 3×10-12',
+    'Rosca Scott | 3×10-12',
+    'Tríceps francês | 3×10-12',
+    'Bird dog | 3×10',
+  ] },
 ];
+const DEFAULT_ROUTINES = PLAN_ROUTINES();
+const OLD_DEFAULT_NAMES = ['Treino A — Peito e Tríceps', 'Treino B — Costas e Bíceps', 'Treino C — Pernas e Ombros'];
+
+/** "Supino | 3×10-12" -> { name, target: { sets: 3, reps: '10-12' } } */
+function parseLine(line) {
+  const [rawName, rawTarget = ''] = String(line).split('|');
+  const name = rawName.trim();
+  const m = rawTarget.trim().match(/^(\d+)\s*[x×]\s*(.+)$/i);
+  return { name, target: m ? { sets: Math.min(10, +m[1]), reps: m[2].trim() } : null };
+}
 
 /* ---------- Frases de incentivo ---------- */
 const DAILY_PHRASES = [
@@ -119,10 +177,17 @@ function load() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const d = JSON.parse(raw);
-      return { workouts: d.workouts || [], routines: d.routines ?? DEFAULT_ROUTINES, current: d.current || null, goals: { ...DEFAULT_GOALS, ...d.goals } };
+      const st = { workouts: d.workouts || [], routines: d.routines ?? DEFAULT_ROUTINES, current: d.current || null, goals: { ...DEFAULT_GOALS, ...d.goals }, plan: d.plan || 1 };
+      // Quem ainda usa as rotinas de exemplo antigas recebe o plano da avaliação.
+      if (st.plan < PLAN_VERSION) {
+        const untouched = st.routines.every((r) => OLD_DEFAULT_NAMES.includes(r.name));
+        if (untouched) { st.routines = PLAN_ROUTINES(); st.goals = { ...DEFAULT_GOALS }; }
+        st.plan = PLAN_VERSION;
+      }
+      return st;
     }
   } catch (e) { /* sem armazenamento disponível */ }
-  return { workouts: [], routines: DEFAULT_ROUTINES, current: null, goals: { ...DEFAULT_GOALS } };
+  return { workouts: [], routines: DEFAULT_ROUTINES, current: null, goals: { ...DEFAULT_GOALS }, plan: PLAN_VERSION };
 }
 
 function save() {
@@ -186,17 +251,30 @@ function lastPerformance(name) {
 
 function allExerciseNames() {
   const names = new Map();
-  state.routines.forEach((r) => r.exercises.forEach((n) => names.set(n.toLowerCase(), n)));
+  state.routines.forEach((r) => r.exercises.forEach((l) => { const n = parseLine(l).name; names.set(n.toLowerCase(), n); }));
   state.workouts.forEach((w) => w.exercises.forEach((e) => names.set(e.name.toLowerCase(), e.name)));
   return [...names.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 }
 
-function newExercise(name) {
+function newExercise(line) {
+  const { name, target } = parseLine(line);
   const prev = lastPerformance(name);
-  const sets = prev
-    ? prev.map((s) => ({ kg: s.kg, reps: s.reps, done: false }))
-    : Array.from({ length: 3 }, () => ({ kg: '', reps: '', done: false }));
-  return { name, sets };
+  const count = target ? target.sets : (prev ? prev.length : 3);
+  const sets = Array.from({ length: count }, (_, i) => {
+    const p = prev && (prev[i] || prev[prev.length - 1]);
+    return { kg: p ? p.kg : '', reps: p ? p.reps : '', done: false };
+  });
+  return target ? { name, target, sets } : { name, sets };
+}
+
+/** Rotina sugerida para hoje: a seguinte à última feita. */
+function nextRoutineId() {
+  if (!state.routines.length) return null;
+  for (let i = state.workouts.length - 1; i >= 0; i--) {
+    const idx = state.routines.findIndex((r) => r.id === state.workouts[i].routineId);
+    if (idx >= 0) return state.routines[(idx + 1) % state.routines.length].id;
+  }
+  return state.routines[0].id;
 }
 
 function header(title, eyebrow = todayLabel()) {
@@ -276,7 +354,7 @@ function viewResumo() {
           <span class="icon-badge" style="--c:${ROUTINE_COLORS[i % ROUTINE_COLORS.length]}">${ICON.dumbbell}</span>
           <span class="body">
             <span class="title" style="display:block">${esc(r.name)}</span>
-            <span class="small muted">${plural(r.exercises.length, 'exercício', 'exercícios')}</span>
+            <span class="small muted">${r.id === nextRoutineId() ? '<span class="c-yellow" style="font-weight:600">Próximo · </span>' : ''}${plural(r.exercises.length, 'exercício', 'exercícios')}</span>
           </span>
           <span class="pill-btn go" aria-hidden="true">Iniciar</span>
         </button>`).join('')}
@@ -301,7 +379,7 @@ function viewLive() {
         <div><div class="value c-pink">${cur.exercises.length}</div><div class="label">Exercícios</div></div>
       </div>
     </div>
-    <div class="spacer"></div>
+    ${cur.note ? `<div class="card note"><p class="eyebrow c-cyan">Antes de começar</p><p class="small">${esc(cur.note)}</p></div>` : '<div class="spacer"></div>'}
 
     ${cur.exercises.map((ex, ei) => {
       const prev = lastPerformance(ex.name);
@@ -311,13 +389,14 @@ function viewLive() {
           <h3>${esc(ex.name)}</h3>
           <button class="icon-btn" data-action="remove-ex" data-ei="${ei}" aria-label="Remover exercício">${ICON.trash}</button>
         </div>
+        ${ex.target ? `<p class="target">Meta · ${ex.target.sets} × ${esc(ex.target.reps)}</p>` : ''}
         ${prev ? `<p class="last-time">Última vez · ${prev.map((s) => `${fmtNum(num(s.kg))} × ${num(s.reps)}`).join('  ')}</p>` : ''}
         <div class="set-head"><span>#</span><span>kg</span><span>reps</span><span></span></div>
         ${ex.sets.map((s, si) => `
           <div class="set-row ${s.done ? 'done' : ''}">
             <span class="n">${si + 1}</span>
             <input inputmode="decimal" value="${esc(s.kg)}" placeholder="–" aria-label="Carga série ${si + 1}" data-ei="${ei}" data-si="${si}" data-k="kg">
-            <input inputmode="numeric" value="${esc(s.reps)}" placeholder="–" aria-label="Repetições série ${si + 1}" data-ei="${ei}" data-si="${si}" data-k="reps">
+            <input inputmode="numeric" value="${esc(s.reps)}" placeholder="${esc(ex.target ? ex.target.reps : '–')}" aria-label="Repetições série ${si + 1}" data-ei="${ei}" data-si="${si}" data-k="reps">
             <button class="check ${s.done ? 'on' : ''}" data-action="toggle-set" data-ei="${ei}" data-si="${si}" aria-label="Concluir série ${si + 1}" aria-pressed="${s.done}">${ICON.check}</button>
           </div>`).join('')}
         <div class="set-actions">
@@ -470,9 +549,13 @@ function viewRotinas() {
           <input class="plain grow" value="${esc(r.name)}" data-routine="${r.id}" data-k="name" aria-label="Nome da rotina">
           <button class="icon-btn" data-action="delete-routine" data-id="${r.id}" aria-label="Excluir rotina">${ICON.trash}</button>
         </div>
-        <textarea rows="${Math.max(3, r.exercises.length)}" data-routine="${r.id}" data-k="exercises" placeholder="Um exercício por linha" aria-label="Exercícios">${esc(r.exercises.join('\n'))}</textarea>
+        <textarea rows="${Math.max(3, r.exercises.length)}" data-routine="${r.id}" data-k="exercises" placeholder="Supino reto | 3×10-12" aria-label="Exercícios">${esc(r.exercises.join('\n'))}</textarea>
+        <textarea rows="2" data-routine="${r.id}" data-k="note" placeholder="Observação (opcional)" aria-label="Observação da rotina">${esc(r.note || '')}</textarea>
       </div>`).join('')}
+    <p class="tiny muted" style="margin:-2px 4px 12px">Um exercício por linha. Para definir a meta, use: Exercício | séries×repetições</p>
     <button class="btn tinted" data-action="add-routine">${ICON.plus} Nova rotina</button>
+    <div class="spacer"></div>
+    <button class="btn tinted" data-action="load-plan">Restaurar plano da avaliação</button>
 
     <p class="section-label">Metas semanais</p>
     <div class="list">
@@ -509,6 +592,8 @@ function viewRotinas() {
 function startWorkout(routine) {
   state.current = {
     name: routine ? routine.name : 'Treino livre',
+    routineId: routine ? routine.id : null,
+    note: routine && routine.note ? routine.note : '',
     startedAt: new Date().toISOString(),
     exercises: routine ? routine.exercises.map(newExercise) : [],
   };
@@ -524,7 +609,7 @@ function finishWorkout() {
     return;
   }
   const now = new Date().toISOString();
-  state.workouts.push({ id: uid(), name: cur.name, date: now, duration: minutesBetween(cur.startedAt, now), exercises });
+  state.workouts.push({ id: uid(), name: cur.name, routineId: cur.routineId || null, date: now, duration: minutesBetween(cur.startedAt, now), exercises });
   state.current = null;
   stopTimer();
   save();
@@ -589,6 +674,13 @@ const actions = {
     save(); render();
   },
   pick: (el) => { progressExercise = el.dataset.name; render(); },
+  'load-plan': async () => {
+    if (!await ask('Trocar suas rotinas pelo plano de 5 dias da avaliação? Seu histórico não muda.', 'Usar plano', false)) return;
+    state.routines = PLAN_ROUTINES();
+    state.goals = { ...DEFAULT_GOALS };
+    save(); render();
+    toast('Plano de 5 dias carregado.');
+  },
   'add-routine': () => {
     state.routines.push({ id: uid(), name: 'Nova rotina', exercises: [] });
     save(); render();
@@ -634,7 +726,7 @@ async function importText(txt) {
   // espera a folha anterior fechar antes de abrir a confirmação
   await new Promise((r) => setTimeout(r, 250));
   if (!await ask(`Importar ${plural(d.workouts.length, 'treino', 'treinos')}? Isso substitui os dados atuais.`, 'Importar', false)) return;
-  state = { workouts: d.workouts, routines: d.routines ?? DEFAULT_ROUTINES, current: d.current || null, goals: { ...DEFAULT_GOALS, ...d.goals } };
+  state = { workouts: d.workouts, routines: d.routines ?? DEFAULT_ROUTINES, current: d.current || null, goals: { ...DEFAULT_GOALS, ...d.goals }, plan: PLAN_VERSION };
   save(); render();
   toast('Backup importado.');
 }
@@ -752,6 +844,7 @@ document.addEventListener('input', (e) => {
     const r = state.routines.find((x) => x.id === t.dataset.routine);
     if (!r) return;
     if (t.dataset.k === 'name') r.name = t.value;
+    else if (t.dataset.k === 'note') r.note = t.value;
     else r.exercises = t.value.split('\n').map((s) => s.trim()).filter(Boolean);
     save();
   } else if (t.dataset.goal) {

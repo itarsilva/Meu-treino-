@@ -235,6 +235,8 @@ textarea { resize: vertical; line-height: 1.5; }
 .exercise-head { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 4px; }
 .exercise-head h3 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; flex: 1; }
 .last-time { font-size: 15px; color: var(--muted); margin-bottom: 8px; }
+.target { font-size: 15px; font-weight: 600; color: var(--yellow); margin-bottom: 2px; }
+.note { display: grid; gap: 6px; margin-top: 12px; }
 
 .set-head, .set-row {
   display: grid; grid-template-columns: 28px 1fr 1fr 44px;
@@ -391,3 +393,4 @@ details > summary::-webkit-details-marker { display: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }
 }
+.set-row input::placeholder { color: var(--muted); opacity: .55; font-weight: 500; font-size: 17px; }

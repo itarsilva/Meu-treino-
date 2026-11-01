@@ -14,6 +14,7 @@ Visual limpo inspirado nos apps de fitness do iOS: fundo escuro (ou claro, confo
   - Ao marcar uma série, abre um **timer de descanso** de 90 s (com +15 s).
 - **Histórico**: todos os treinos salvos, com duração, séries e volume total (kg × reps).
 - **Progresso**: gráfico da maior carga por treino em cada exercício, recorde pessoal e 1RM estimado.
+- **Plano de 5 dias** baseado na avaliação física: ênfase em costas e postura, pernas sem carga na coluna, trabalho unilateral para a coxa esquerda e core. Cada exercício tem meta de séries×repetições (formato `Exercício | 3×10-12`).
 - **Rotinas**: edite seus treinos fixos (um exercício por linha) e ajuste as metas semanais.
 - **Backup**: exporte/importe seus dados em JSON.
 
