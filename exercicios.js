@@ -163,8 +163,8 @@
       title: 'Leg press', hl: ['leg'],
       props: [{ k: 'beam', a: [76, 132], b: [36, 92], w: 7 }, { k: 'rail', a: [96, 140], b: [168, 68] }, { k: 'platform', at: 'ankN' }],
       poses: [
-        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [104, 96], fF: [102, 98], kN: 1, kF: 1 }),
-        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [120, 80], fF: [118, 82], kN: 1, kF: 1 }),
+        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [104, 96], fF: [102, 98], kN: -1, kF: -1 }),
+        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [120, 80], fF: [118, 82], kN: -1, kF: -1 }),
       ],
       tips: ['Lombar sempre encostada no banco.', 'Desça até onde não tirar o quadril do encosto.', 'Não trave os joelhos no alto.'],
     },
@@ -172,8 +172,8 @@
       title: 'Leg press unilateral', hl: ['leg'],
       props: [{ k: 'beam', a: [76, 132], b: [36, 92], w: 7 }, { k: 'rail', a: [96, 140], b: [168, 68] }, { k: 'platform', at: 'ankN' }],
       poses: [
-        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [104, 96], fF: [100, 148], kN: 1, kF: -1 }),
-        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [120, 80], fF: [100, 148], kN: 1, kF: -1 }),
+        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [104, 96], fF: [100, 148], kN: -1, kF: -1 }),
+        P({ hip: [72, 124], torso: -50, aN: [20, 30], aF: [18, 28], fN: [120, 80], fF: [100, 148], kN: -1, kF: -1 }),
       ],
       tips: ['Comece pela perna esquerda, a mais fraca.', 'Faça as mesmas repetições com a direita.', 'Lombar encostada e joelho alinhado com o pé.'],
     },
