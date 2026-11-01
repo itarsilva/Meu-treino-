@@ -15,6 +15,7 @@ Visual limpo inspirado nos apps de fitness do iOS: fundo escuro (ou claro, confo
 - **Histórico**: todos os treinos salvos, com duração, séries e volume total (kg × reps).
 - **Progresso**: gráfico da maior carga por treino em cada exercício, recorde pessoal e 1RM estimado.
 - **Plano de 5 dias** baseado na avaliação física: ênfase em costas e postura, pernas sem carga na coluna, trabalho unilateral para a coxa esquerda e core. Cada exercício tem meta de séries×repetições (formato `Exercício | 3×10-12`).
+- **Corpo** (em Progresso): registro de peso e medidas, gráfico com a faixa ideal de ganho (+0,25 a +0,5 kg/semana) e aviso se o ritmo está baixo ou alto.
 - **Rotinas**: edite seus treinos fixos (um exercício por linha) e ajuste as metas semanais.
 - **Backup**: exporte/importe seus dados em JSON.
 

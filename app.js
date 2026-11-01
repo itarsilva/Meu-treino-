@@ -151,6 +151,7 @@ const ICON = {
   trash: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>'),
   play: svg('<path d="M7 4.5v15l12-7.5z" fill="currentColor"/>'),
   download: svg('<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>'),
+  scale: svg('<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8.5 9a5 5 0 0 1 7 0l-2.5 3"/>'),
   paste: svg('<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6"/>'),
   upload: svg('<path d="M12 20V9M7 14l5-5 5 5M5 4h14"/>'),
 };
@@ -165,6 +166,7 @@ const TABS = [
 let state = load();
 let tab = 'treino';
 let progressExercise = null;
+let progressMode = 'cargas';
 
 /* ---------- Persistência ---------- */
 
@@ -177,7 +179,7 @@ function load() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const d = JSON.parse(raw);
-      const st = { workouts: d.workouts || [], routines: d.routines ?? DEFAULT_ROUTINES, current: d.current || null, goals: { ...DEFAULT_GOALS, ...d.goals }, plan: d.plan || 1 };
+      const st = { workouts: d.workouts || [], routines: d.routines ?? DEFAULT_ROUTINES, current: d.current || null, goals: { ...DEFAULT_GOALS, ...d.goals }, plan: d.plan || 1, body: d.body || [] };
       // Quem ainda usa as rotinas de exemplo antigas recebe o plano da avaliação.
       if (st.plan < PLAN_VERSION) {
         const untouched = st.routines.every((r) => OLD_DEFAULT_NAMES.includes(r.name));
@@ -187,7 +189,7 @@ function load() {
       return st;
     }
   } catch (e) { /* sem armazenamento disponível */ }
-  return { workouts: [], routines: DEFAULT_ROUTINES, current: null, goals: { ...DEFAULT_GOALS }, plan: PLAN_VERSION };
+  return { workouts: [], routines: DEFAULT_ROUTINES, current: null, goals: { ...DEFAULT_GOALS }, plan: PLAN_VERSION, body: [] };
 }
 
 function save() {
@@ -347,6 +349,8 @@ function viewResumo() {
       <p class="quote-text">${esc(phraseOfDay())}</p>
     </div>
 
+    ${weightRow()}
+
     <h2 class="section-title">Começar treino</h2>
     <div class="list">
       ${state.routines.map((r, i) => `
@@ -365,6 +369,22 @@ function viewResumo() {
       </button>
     </div>
   `;
+}
+
+function weightRow() {
+  const w = bodySorted().filter((e) => e.weight > 0);
+  const last = w[w.length - 1];
+  const dayStart = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); };
+  const days = last ? Math.max(0, Math.round((dayStart(Date.now()) - dayStart(last.date)) / 864e5)) : null;
+  const sub = !last ? 'Toque para registrar seu peso'
+    : days >= 7 ? `Último há ${plural(days, 'dia', 'dias')} · hora de se pesar`
+    : `${fmtNum(last.weight)} kg · ${days === 0 ? 'hoje' : `há ${plural(days, 'dia', 'dias')}`}`;
+  return `<div class="list" style="margin-top:12px">
+    <button class="list-row" data-action="go-body">
+      <span class="icon-badge" style="--c:var(--pink)">${ICON.scale}</span>
+      <span class="body"><span class="title" style="display:block">Peso corporal</span><span class="small ${!last || days >= 7 ? 'c-yellow' : 'muted'}">${sub}</span></span>
+      <span class="chev">${ICON.chevron}</span>
+    </button></div>`;
 }
 
 function viewLive() {
@@ -461,11 +481,20 @@ function viewHistorico() {
   `;
 }
 
+function segmented() {
+  const opt = (id, label) => `<button class="seg ${progressMode === id ? 'on' : ''}" data-action="mode" data-mode="${id}" aria-pressed="${progressMode === id}">${label}</button>`;
+  return `<div class="segmented" role="group" aria-label="Tipo de progresso">${opt('cargas', 'Cargas')}${opt('corpo', 'Corpo')}</div>`;
+}
+
 function viewProgresso() {
+  return progressMode === 'corpo' ? viewCorpo() : viewCargas();
+}
+
+function viewCargas() {
   const names = [...new Set(state.workouts.flatMap((w) => w.exercises.filter((e) => e.sets.some((s) => s.done && num(s.kg) > 0)).map((e) => e.name)))]
     .sort((a, b) => a.localeCompare(b, 'pt-BR'));
   if (!names.length) {
-    return header('Progresso') + emptyState(ICON.trend, 'var(--ring-green)', 'Sem dados ainda', 'Registre alguns treinos para ver sua evolução.');
+    return header('Progresso') + segmented() + emptyState(ICON.trend, 'var(--ring-green)', 'Sem dados ainda', 'Registre alguns treinos para ver sua evolução.');
   }
   if (!progressExercise || !names.includes(progressExercise)) {
     // Começa pelo primeiro exercício do treino mais recente.
@@ -494,6 +523,7 @@ function viewProgresso() {
 
   return `
     ${header('Progresso', 'Evolução de carga')}
+    ${segmented()}
     <div class="chips" role="tablist">
       ${names.map((n) => `<button class="chip ${n === progressExercise ? 'on' : ''}" data-action="pick" data-name="${esc(n)}" role="tab" aria-selected="${n === progressExercise}">${esc(n)}</button>`).join('')}
     </div>
@@ -508,34 +538,169 @@ function viewProgresso() {
         <div class="label" style="font-weight:600">Maior carga</div>
         <div class="tiny muted">${plural(points.length, 'treino', 'treinos')}</div>
       </div>
-      ${points.length >= 2 ? chart(points) : '<p class="small muted" style="margin-top:8px">Faça esse exercício em pelo menos 2 treinos para ver o gráfico.</p>'}
+      ${points.length >= 2 ? chart(points, { key: 'best', label: `Evolução da maior carga em ${progressExercise}` }) : '<p class="small muted" style="margin-top:8px">Faça esse exercício em pelo menos 2 treinos para ver o gráfico.</p>'}
     </div>
   `;
 }
 
-function chart(points) {
-  const W = 600, H = 300, P = { l: 8, r: 64, t: 20, b: 44 };
-  const vals = points.map((p) => p.best);
+function chart(points, { key, label, unit = 'kg', timeScale = false, band = null }) {
+  const W = 600, H = 300, P = { l: 8, r: 72, t: 20, b: 44 };
+  const vals = points.map((p) => p[key]);
   let min = Math.min(...vals), max = Math.max(...vals);
-  if (min === max) { min -= 5; max += 5; }
+  if (band) { min = Math.min(min, ...band.map((b) => b[1]), ...band.map((b) => b[2])); max = Math.max(max, ...band.map((b) => b[1]), ...band.map((b) => b[2])); }
+  if (max - min < 2) { const mid = (min + max) / 2; min = mid - 1; max = mid + 1; }
   const pad = (max - min) * 0.15;
   min = Math.max(0, min - pad); max += pad;
-  const x = (i) => P.l + (i / (points.length - 1)) * (W - P.l - P.r);
+  const t0 = new Date(points[0].date).getTime(), t1 = new Date(points[points.length - 1].date).getTime();
+  const xt = (t) => P.l + ((t - t0) / Math.max(1, t1 - t0)) * (W - P.l - P.r);
+  const x = (i) => timeScale ? xt(new Date(points[i].date).getTime()) : P.l + (i / (points.length - 1)) * (W - P.l - P.r);
   const y = (v) => P.t + (1 - (v - min) / (max - min)) * (H - P.t - P.b);
+  const fine = max - min < 10;
+  const tickFmt = (v) => fmtNum(fine ? Math.round(v * 10) / 10 : Math.round(v));
   const ticks = [0, 0.5, 1].map((t) => min + t * (max - min));
-  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.best).toFixed(1)}`).join(' ');
+  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[key]).toFixed(1)}`).join(' ');
   const area = `${line} L${x(points.length - 1).toFixed(1)},${H - P.b} L${x(0).toFixed(1)},${H - P.b} Z`;
+  // band: [[time, low, high], ...] — faixa de ritmo ideal
+  const bandPath = band ? `M${band.map((b) => `${xt(b[0]).toFixed(1)},${y(b[2]).toFixed(1)}`).join(' L')} L${[...band].reverse().map((b) => `${xt(b[0]).toFixed(1)},${y(b[1]).toFixed(1)}`).join(' L')} Z` : '';
   const labelIdx = [...new Set([0, points.length - 1])];
   return `
-    <svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Evolução da maior carga em ${esc(progressExercise)}">
-      <defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="stop-a"/><stop offset="1" class="stop-b"/></linearGradient></defs>
+    <svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">
+      <defs><linearGradient id="area-${key}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="stop-a"/><stop offset="1" class="stop-b"/></linearGradient></defs>
       ${ticks.map((t) => `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${y(t)}" y2="${y(t)}"/>
-        <text x="${W - P.r + 10}" y="${y(t) + 7}">${fmtNum(Math.round(t))}</text>`).join('')}
-      <path class="area" d="${area}"/>
+        <text x="${W - P.r + 10}" y="${y(t) + 7}">${tickFmt(t)}</text>`).join('')}
+      ${band ? `<path class="band" d="${bandPath}"/>` : `<path class="area" fill="url(#area-${key})" d="${area}"/>`}
       <path class="line" d="${line}"/>
-      ${points.map((p, i) => `<circle class="dot" cx="${x(i)}" cy="${y(p.best)}" r="6"><title>${fmtDate(p.date)}: ${fmtNum(p.best)} kg</title></circle>`).join('')}
+      ${points.map((p, i) => `<circle class="dot" cx="${x(i)}" cy="${y(p[key])}" r="6"><title>${fmtDate(p.date)}: ${fmtNum(p[key])} ${unit}</title></circle>`).join('')}
       ${labelIdx.map((i) => `<text x="${x(i)}" y="${H - 10}" text-anchor="${i === 0 ? 'start' : 'end'}">${fmtDate(points[i].date, { day: 'numeric', month: 'short' })}</text>`).join('')}
     </svg>`;
+}
+
+/* ---------- Corpo: peso e medidas ---------- */
+
+const MEASURES = [
+  { k: 'arm', label: 'Braço contraído' },
+  { k: 'chest', label: 'Tórax' },
+  { k: 'waist', label: 'Cintura' },
+  { k: 'thighR', label: 'Coxa direita' },
+  { k: 'thighL', label: 'Coxa esquerda' },
+  { k: 'calf', label: 'Panturrilha' },
+];
+
+function bodySorted() {
+  return [...state.body].sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+
+function todayInput() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Ritmo de ganho (kg/semana) entre o registro mais antigo das últimas ~4 semanas e o atual. */
+function weightRate(list) {
+  const w = list.filter((e) => e.weight > 0);
+  if (w.length < 2) return null;
+  const last = w[w.length - 1];
+  const lastT = new Date(last.date).getTime();
+  const base = w.find((e) => lastT - new Date(e.date).getTime() <= 35 * 864e5) || w[0];
+  const days = (lastT - new Date(base.date).getTime()) / 864e5;
+  if (base === last || days < 6) return null;
+  return { perWeek: (last.weight - base.weight) / (days / 7), days };
+}
+
+function rateStatus(r) {
+  if (!r) return null;
+  const v = r.perWeek;
+  if (v < 0.15) return { cls: 'warn', title: 'Abaixo do ritmo', tip: 'Coma cerca de 200 kcal a mais por dia e confira a proteína.' };
+  if (v > 0.6) return { cls: 'fast', title: 'Acima do ritmo', tip: 'Ganho rápido tende a vir com mais gordura. Reduza uns 150–200 kcal.' };
+  return { cls: 'good', title: 'No ritmo', tip: 'Ganho entre 0,25 e 0,5 kg por semana. Continue assim.' };
+}
+
+function viewCorpo() {
+  const list = bodySorted();
+  const weights = list.filter((e) => e.weight > 0);
+  const last = weights[weights.length - 1];
+  const first = weights[0];
+  const r = weightRate(list);
+  const st = rateStatus(r);
+
+  // faixa ideal (+0,25 a +0,5 kg/semana) a partir do primeiro registro
+  let band = null;
+  if (weights.length >= 2) {
+    const t0 = new Date(first.date).getTime(), t1 = new Date(last.date).getTime();
+    const wk = (t1 - t0) / (7 * 864e5);
+    band = [[t0, first.weight, first.weight], [t1, first.weight + 0.25 * wk, first.weight + 0.5 * wk]];
+  }
+
+  const latestOf = (k) => { for (let i = list.length - 1; i >= 0; i--) if (list[i][k] > 0) return list[i]; return null; };
+  const firstOf = (k) => list.find((e) => e[k] > 0) || null;
+  const hasMeasures = MEASURES.some((m) => latestOf(m.k));
+  const tR = latestOf('thighR'), tL = latestOf('thighL');
+
+  return `
+    ${header('Progresso', 'Peso e medidas')}
+    ${segmented()}
+
+    ${last ? `
+    <div class="metrics">
+      <div class="metric"><div class="label">Peso atual</div><div class="value c-pink">${fmtNum(last.weight)}<small> KG</small></div><div class="tiny muted">${fmtDate(last.date)}</div></div>
+      <div class="metric"><div class="label">Desde o início</div><div class="value c-green">${last.weight - first.weight >= 0 ? '+' : ''}${fmtNum(Math.round((last.weight - first.weight) * 10) / 10)}<small> KG</small></div><div class="tiny muted">desde ${fmtDate(first.date, { day: 'numeric', month: 'short' })}</div></div>
+    </div>
+    ${st ? `
+    <div class="card status ${st.cls}">
+      <div class="row between"><span class="status-pill">${st.title}</span><span class="value-sm">${r.perWeek >= 0 ? '+' : ''}${fmtNum(Math.round(r.perWeek * 100) / 100)} kg/semana</span></div>
+      <p class="small muted">${st.tip}</p>
+    </div>` : '<p class="tiny muted" style="margin:-2px 4px 12px">Registre o peso por pelo menos 1 semana para ver se o ganho está no ritmo.</p>'}
+    <div class="card">
+      <div class="row between">
+        <div style="font-weight:600">Peso corporal</div>
+        <div class="tiny muted">${plural(weights.length, 'registro', 'registros')}</div>
+      </div>
+      ${weights.length >= 2
+        ? chart(weights, { key: 'weight', label: 'Evolução do peso corporal', timeScale: true, band }) + '<p class="tiny muted legend"><span class="swatch"></span>Faixa ideal: +0,25 a +0,5 kg por semana</p>'
+        : '<p class="small muted" style="margin-top:8px">Com 2 registros o gráfico aparece aqui.</p>'}
+    </div>` : emptyState(ICON.scale, 'var(--pink)', 'Registre seu peso', 'Pese-se 1 vez por semana, de manhã e em jejum, e anote aqui. Dá para incluir as medidas da sua avaliação com a data dela.')}
+
+    <p class="section-label">Novo registro</p>
+    <div class="card body-form">
+      <div class="form-grid">
+        <label for="b-date">Data<input id="b-date" type="date" value="${todayInput()}" max="${todayInput()}"></label>
+        <label for="b-weight">Peso (kg)<input id="b-weight" inputmode="decimal" placeholder="${last ? fmtNum(last.weight) : '66,0'}"></label>
+      </div>
+      <details class="measures-toggle">
+        <summary><span>Medidas em cm (opcional)</span><span class="chev">${ICON.chevron}</span></summary>
+        <div class="form-grid">
+          ${MEASURES.map((m) => `<label for="b-${m.k}">${m.label}<input id="b-${m.k}" inputmode="decimal" placeholder="${latestOf(m.k) ? fmtNum(latestOf(m.k)[m.k]) : '–'}"></label>`).join('')}
+        </div>
+      </details>
+      <button class="btn primary" data-action="save-body">Salvar registro</button>
+    </div>
+
+    ${hasMeasures ? `
+    <p class="section-label">Medidas</p>
+    <div class="list">
+      ${MEASURES.map((m) => {
+        const l = latestOf(m.k); if (!l) return '';
+        const f = firstOf(m.k); const d = Math.round((l[m.k] - f[m.k]) * 10) / 10;
+        // na cintura, diminuir é bom; nas demais, aumentar é bom
+        const good = m.k === 'waist' ? d <= 0 : d >= 0;
+        return `<div class="measure-row"><span class="grow">${m.label}</span>
+          <span class="mv">${fmtNum(l[m.k])} cm</span>
+          <span class="md ${d === 0 ? 'muted' : good ? 'c-green' : 'c-pink'}">${f === l ? '' : `${d > 0 ? '+' : ''}${fmtNum(d)}`}</span></div>`;
+      }).join('')}
+    </div>
+    ${tR && tL ? `<p class="tiny muted" style="margin:0 4px 12px">Diferença entre as coxas: ${fmtNum(Math.abs(Math.round((tR.thighR - tL.thighL) * 10) / 10))} cm. Os exercícios de uma perna por vez ajudam a equilibrar.</p>` : ''}` : ''}
+
+    ${list.length ? `
+    <p class="section-label">Registros</p>
+    <div class="list">
+      ${[...list].reverse().map((e) => `
+        <div class="measure-row">
+          <span class="grow">${fmtDate(e.date, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+          <span class="mv">${e.weight > 0 ? `${fmtNum(e.weight)} kg` : 'medidas'}</span>
+          <button class="icon-btn" data-action="delete-body" data-id="${e.id}" aria-label="Excluir registro">${ICON.trash}</button>
+        </div>`).join('')}
+    </div>` : ''}
+  `;
 }
 
 function viewRotinas() {
@@ -674,6 +839,35 @@ const actions = {
     save(); render();
   },
   pick: (el) => { progressExercise = el.dataset.name; render(); },
+  mode: (el) => { progressMode = el.dataset.mode; render(); },
+  'go-body': () => { tab = 'progresso'; progressMode = 'corpo'; render(); window.scrollTo(0, 0); },
+  'save-body': () => {
+    const val = (id) => { const el = document.getElementById(id); return el ? num(el.value) : 0; };
+    const dateStr = document.getElementById('b-date').value || todayInput();
+    const entry = { id: uid(), date: `${dateStr}T12:00:00`, weight: val('b-weight') };
+    MEASURES.forEach((m) => { const v = val(`b-${m.k}`); if (v > 0) entry[m.k] = v; });
+    if (!(entry.weight > 0) && !MEASURES.some((m) => entry[m.k])) {
+      toast('Preencha o peso ou pelo menos uma medida.');
+      return;
+    }
+    if (entry.weight > 0 && (entry.weight < 30 || entry.weight > 250)) {
+      toast('Confira o peso: use quilos, por exemplo 66,2.');
+      return;
+    }
+    // um registro por dia: junta com o que já existe na mesma data
+    const same = state.body.find((e) => e.date.slice(0, 10) === dateStr);
+    if (same) Object.keys(entry).forEach((k) => { if (k !== 'id' && k !== 'date' && entry[k] > 0) same[k] = entry[k]; });
+    else state.body.push(entry);
+    save(); render();
+    const r = weightRate(bodySorted());
+    const st = rateStatus(r);
+    toast(st && st.cls === 'good' ? 'Registro salvo. Você está no ritmo certo!' : 'Registro salvo. Quem anota, evolui.');
+  },
+  'delete-body': async (el) => {
+    if (!await ask('Excluir este registro de peso e medidas?', 'Excluir registro')) return;
+    state.body = state.body.filter((e) => e.id !== el.dataset.id);
+    save(); render();
+  },
   'load-plan': async () => {
     if (!await ask('Trocar suas rotinas pelo plano de 5 dias da avaliação? Seu histórico não muda.', 'Usar plano', false)) return;
     state.routines = PLAN_ROUTINES();
@@ -726,7 +920,7 @@ async function importText(txt) {
   // espera a folha anterior fechar antes de abrir a confirmação
   await new Promise((r) => setTimeout(r, 250));
   if (!await ask(`Importar ${plural(d.workouts.length, 'treino', 'treinos')}? Isso substitui os dados atuais.`, 'Importar', false)) return;
-  state = { workouts: d.workouts, routines: d.routines ?? DEFAULT_ROUTINES, current: d.current || null, goals: { ...DEFAULT_GOALS, ...d.goals }, plan: PLAN_VERSION };
+  state = { workouts: d.workouts, routines: d.routines ?? DEFAULT_ROUTINES, current: d.current || null, goals: { ...DEFAULT_GOALS, ...d.goals }, plan: PLAN_VERSION, body: d.body || [] };
   save(); render();
   toast('Backup importado.');
 }
