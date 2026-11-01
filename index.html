@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
+  <meta name="claude:viewport-fit-sides" content="cover">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Meu Treino</title>
   <meta name="description" content="Acompanhe seus treinos, séries, cargas e evolução.">
@@ -31,6 +32,14 @@
   </div>
 
   <nav class="tabbar" id="tabbar"></nav>
+
+  <div id="sheet" class="sheet" hidden>
+    <div class="sheet-panel" role="dialog" aria-modal="true">
+      <div class="sheet-group" id="sheet-body"></div>
+      <button class="sheet-btn cancel" data-sheet="cancel">Cancelar</button>
+    </div>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="app.js"></script>
 </body>

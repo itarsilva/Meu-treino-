@@ -32,6 +32,7 @@ const ICON = {
   trash: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>'),
   play: svg('<path d="M7 4.5v15l12-7.5z" fill="currentColor"/>'),
   download: svg('<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>'),
+  paste: svg('<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6"/>'),
   upload: svg('<path d="M12 20V9M7 14l5-5 5 5M5 4h14"/>'),
 };
 
@@ -423,12 +424,17 @@ function viewRotinas() {
       </button>
       <label class="list-row">
         <span class="icon-badge" style="--c:var(--cyan)">${ICON.upload}</span>
-        <span class="body"><span class="title">Importar backup</span></span>
+        <span class="body"><span class="title">Importar arquivo de backup</span></span>
         <span class="chev">${ICON.chevron}</span>
-        <input type="file" accept="application/json" data-action="import" hidden>
+        <input type="file" accept="application/json,.json" data-action="import" hidden>
       </label>
+      <button class="list-row" data-action="paste-import">
+        <span class="icon-badge" style="--c:var(--cyan)">${ICON.paste}</span>
+        <span class="body"><span class="title">Colar backup</span></span>
+        <span class="chev">${ICON.chevron}</span>
+      </button>
     </div>
-    <p class="tiny muted" style="margin:0 4px">Seus dados ficam só neste aparelho. Exporte de vez em quando para não perder nada.</p>
+    <p class="tiny muted" style="margin:0 4px">Seus dados ficam só neste aparelho. Exportar baixa um arquivo e copia o backup; guarde numa nota para não perder nada.</p>
   `;
 }
 
@@ -446,13 +452,13 @@ function startWorkout(routine) {
 
 function finishWorkout() {
   const cur = state.current;
-  cur.exercises = cur.exercises.filter((e) => e.sets.some((s) => s.done));
-  if (!cur.exercises.length) {
-    alert('Conclua pelo menos uma série antes de finalizar.');
+  const exercises = cur.exercises.filter((e) => e.sets.some((s) => s.done));
+  if (!exercises.length) {
+    toast('Conclua pelo menos uma série antes de finalizar.');
     return;
   }
   const now = new Date().toISOString();
-  state.workouts.push({ id: uid(), name: cur.name, date: now, duration: minutesBetween(cur.startedAt, now), exercises: cur.exercises });
+  state.workouts.push({ id: uid(), name: cur.name, date: now, duration: minutesBetween(cur.startedAt, now), exercises });
   state.current = null;
   stopTimer();
   save();
@@ -471,8 +477,8 @@ const actions = {
     state.current.exercises.push(newExercise(name));
     save(); render();
   },
-  'remove-ex': (el) => {
-    if (!confirm('Remover este exercício do treino?')) return;
+  'remove-ex': async (el) => {
+    if (!await ask('Remover este exercício do treino?', 'Remover')) return;
     state.current.exercises.splice(+el.dataset.ei, 1);
     save(); render();
   },
@@ -494,12 +500,12 @@ const actions = {
     if (set.done) { startTimer(); if (navigator.vibrate) navigator.vibrate(15); }
   },
   finish: finishWorkout,
-  cancel: () => {
-    if (!confirm('Descartar este treino? O que foi registrado será perdido.')) return;
+  cancel: async () => {
+    if (!await ask('Descartar este treino? O que foi registrado será perdido.', 'Descartar treino')) return;
     state.current = null; stopTimer(); save(); render();
   },
-  'delete-workout': (el) => {
-    if (!confirm('Excluir este treino do histórico?')) return;
+  'delete-workout': async (el) => {
+    if (!await ask('Excluir este treino do histórico?', 'Excluir treino')) return;
     state.workouts = state.workouts.filter((w) => w.id !== el.dataset.id);
     save(); render();
   },
@@ -508,12 +514,18 @@ const actions = {
     state.routines.push({ id: uid(), name: 'Nova rotina', exercises: [] });
     save(); render();
   },
-  'delete-routine': (el) => {
-    if (!confirm('Excluir esta rotina?')) return;
+  'delete-routine': async (el) => {
+    if (!await ask('Excluir esta rotina?', 'Excluir rotina')) return;
     state.routines = state.routines.filter((r) => r.id !== el.dataset.id);
     save(); render();
   },
   export: () => {
+    const json = JSON.stringify(state);
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(json)
+        .then(() => toast('Backup copiado. Cole numa nota ou mensagem para guardar.'))
+        .catch(() => {});
+    }
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -521,9 +533,79 @@ const actions = {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   },
+  'paste-import': () => {
+    openSheet(`
+      <p class="sheet-msg">Cole aqui o texto do backup.</p>
+      <textarea id="paste-box" rows="5" placeholder="{&quot;workouts&quot;: …}"></textarea>
+      <button class="sheet-btn" data-sheet="paste-ok">Importar</button>`, (v) => { if (v === 'paste-ok') importText(document.getElementById('paste-box').value); });
+  },
   'timer-add': () => { timerEnd += 15000; timerTotal += 15000; tickTimer(); },
   'timer-stop': () => stopTimer(),
 };
+
+async function importText(txt) {
+  let d;
+  try {
+    d = JSON.parse(txt);
+    if (!Array.isArray(d.workouts)) throw new Error('formato');
+  } catch (err) {
+    toast('Backup inválido. Use um backup exportado pelo Meu Treino.');
+    return;
+  }
+  // espera a folha anterior fechar antes de abrir a confirmação
+  await new Promise((r) => setTimeout(r, 250));
+  if (!await ask(`Importar ${plural(d.workouts.length, 'treino', 'treinos')}? Isso substitui os dados atuais.`, 'Importar', false)) return;
+  state = { workouts: d.workouts, routines: d.routines ?? DEFAULT_ROUTINES, current: d.current || null, goals: { ...DEFAULT_GOALS, ...d.goals } };
+  save(); render();
+  toast('Backup importado.');
+}
+
+/* ---------- Folha de confirmação e avisos (no lugar de confirm/alert) ---------- */
+
+const $sheet = document.getElementById('sheet');
+const $sheetBody = document.getElementById('sheet-body');
+let sheetDone = null;
+
+function openSheet(html, onChoose) {
+  $sheetBody.innerHTML = html;
+  sheetDone = onChoose;
+  $sheet.hidden = false;
+  requestAnimationFrame(() => $sheet.classList.add('open'));
+  const first = $sheetBody.querySelector('textarea, button');
+  if (first) first.focus();
+}
+
+function closeSheet(value) {
+  $sheet.classList.remove('open');
+  setTimeout(() => { $sheet.hidden = true; }, 200);
+  const done = sheetDone; sheetDone = null;
+  if (done) done(value);
+}
+
+function ask(message, okLabel, destructive = true) {
+  return new Promise((resolve) => {
+    openSheet(`<p class="sheet-msg">${esc(message)}</p>
+      <button class="sheet-btn ${destructive ? 'destructive' : ''}" data-sheet="ok">${esc(okLabel)}</button>`,
+      (v) => resolve(v === 'ok'));
+  });
+}
+
+$sheet.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-sheet]');
+  if (b) closeSheet(b.dataset.sheet);
+  else if (e.target === $sheet) closeSheet('cancel');
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$sheet.hidden) closeSheet('cancel'); });
+
+let toastId = null;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.hidden = false;
+  requestAnimationFrame(() => el.classList.add('show'));
+  clearTimeout(toastId);
+  toastId = setTimeout(() => { el.classList.remove('show'); setTimeout(() => { el.hidden = true; }, 250); }, 2800);
+}
 
 /* ---------- Timer de descanso ---------- */
 
@@ -602,17 +684,7 @@ document.addEventListener('input', (e) => {
 document.addEventListener('change', (e) => {
   const t = e.target;
   if (t.dataset.action === 'import' && t.files[0]) {
-    t.files[0].text().then((txt) => {
-      try {
-        const d = JSON.parse(txt);
-        if (!Array.isArray(d.workouts)) throw new Error('formato');
-        if (!confirm(`Importar ${plural(d.workouts.length, 'treino', 'treinos')}? Isso substitui os dados atuais.`)) return;
-        state = { workouts: d.workouts, routines: d.routines || [], current: d.current || null, goals: { ...DEFAULT_GOALS, ...d.goals } };
-        save(); render();
-      } catch (err) {
-        alert('Arquivo inválido. Use um arquivo exportado pelo Meu Treino.');
-      }
-    });
+    t.files[0].text().then(importText);
     t.value = '';
   }
 });
