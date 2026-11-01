@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Meu Treino</title>
+  <meta name="description" content="Acompanhe seus treinos, séries, cargas e evolução.">
+  <meta name="theme-color" content="#16a34a">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>💪 Meu Treino</h1>
+  </header>
+
+  <main id="view"></main>
+
+  <div id="timer" class="timer hidden" role="status" aria-live="polite">
+    <span>Descanso</span>
+    <strong id="timer-value">01:30</strong>
+    <button data-action="timer-add">+15s</button>
+    <button data-action="timer-stop">✕</button>
+  </div>
+
+  <nav class="tabbar">
+    <button data-tab="treino" class="active"><span>🏋️</span>Treino</button>
+    <button data-tab="historico"><span>📅</span>Histórico</button>
+    <button data-tab="progresso"><span>📈</span>Progresso</button>
+    <button data-tab="rotinas"><span>📋</span>Rotinas</button>
+  </nav>
+
+  <script src="app.js"></script>
+</body>
+</html>
