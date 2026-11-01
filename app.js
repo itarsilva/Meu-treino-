@@ -312,6 +312,7 @@ function render() {
   ).join('');
   const views = { treino: viewTreino, historico: viewHistorico, progresso: viewProgresso, rotinas: viewRotinas };
   $view.innerHTML = views[tab]();
+  if (window.ExAnim) $view.querySelectorAll('canvas[data-icon]').forEach((c) => ExAnim.icon(c, c.dataset.icon));
 }
 
 function viewTreino() {
@@ -352,16 +353,23 @@ function viewResumo() {
     ${weightRow()}
 
     <h2 class="section-title">Começar treino</h2>
-    <div class="list">
-      ${state.routines.map((r, i) => `
-        <button class="list-row" data-action="start" data-id="${r.id}">
-          <span class="icon-badge" style="--c:${ROUTINE_COLORS[i % ROUTINE_COLORS.length]}">${ICON.dumbbell}</span>
-          <span class="body">
-            <span class="title" style="display:block">${esc(r.name)}</span>
-            <span class="small muted">${r.id === nextRoutineId() ? '<span class="c-yellow" style="font-weight:600">Próximo · </span>' : ''}${plural(r.exercises.length, 'exercício', 'exercícios')}</span>
+    <div class="wk-list">
+      ${routineIcons().map(({ r, key }) => {
+        const m = r.name.match(/^(.+?)\s+[—-]\s+(.+)$/);
+        const next = r.id === nextRoutineId();
+        return `
+        <button class="wk-card" data-action="start" data-id="${r.id}" aria-label="Iniciar ${esc(r.name)}">
+          <span class="wk-top">
+            ${key ? `<canvas class="wk-icon" data-icon="${key}" aria-hidden="true"></canvas>` : `<span class="wk-icon wk-icon-fallback">${ICON.dumbbell}</span>`}
+            <span class="wk-play" aria-hidden="true">${ICON.play}</span>
           </span>
-          <span class="pill-btn go" aria-hidden="true">Iniciar</span>
-        </button>`).join('')}
+          ${m ? `<span class="wk-eyebrow">${esc(m[1])}</span>` : ''}
+          <span class="wk-title">${esc(m ? m[2] : r.name)}</span>
+          <span class="wk-sub">${next ? '<span class="wk-next">Próximo</span>' : ''}${plural(r.exercises.length, 'exercício', 'exercícios')}</span>
+        </button>`;
+      }).join('')}
+    </div>
+    <div class="list">
       <button class="list-row" data-action="start-empty">
         <span class="icon-badge" style="--c:var(--muted)">${ICON.plus}</span>
         <span class="body"><span class="title">Treino livre</span></span>
@@ -369,6 +377,17 @@ function viewResumo() {
       </button>
     </div>
   `;
+}
+
+/** Bonequinho de cada rotina: o primeiro exercício com animação, sem repetir entre rotinas. */
+function routineIcons() {
+  const used = new Set();
+  return state.routines.map((r) => {
+    const keys = r.exercises.map((l) => (window.ExAnim ? ExAnim.animFor(parseLine(l).name) : null)).filter(Boolean);
+    const key = keys.find((k) => !used.has(k)) || keys[0] || null;
+    if (key) used.add(key);
+    return { r, key };
+  });
 }
 
 function weightRow() {

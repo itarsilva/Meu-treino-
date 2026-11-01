@@ -524,6 +524,94 @@
     return x > 0 ? '→ ' : '← ';
   }
 
+  /* ---------- Cores ---------- */
+
+  function parseColor(c) {
+    c = String(c || '').trim();
+    if (c[0] === '#') {
+      const h = c.length === 4 ? c.slice(1).split('').map((x) => x + x).join('') : c.slice(1, 7);
+      return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+    }
+    const m = c.match(/[\d.]+/g);
+    return m ? m.slice(0, 3).map(Number) : [0, 0, 0];
+  }
+  /** Mistura em sRGB, igual ao color-mix(in srgb, a, b t) do CSS. */
+  function mix(a, b, t) {
+    const A = parseColor(a), B = parseColor(b);
+    return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * t)).join(',')})`;
+  }
+
+  /* ---------- Figura (formas cheias e arredondadas) ---------- */
+
+  const R = { torsoHip: 7.2, torsoSh: 8.4, head: 9.6, gap: 3.2, th: [6.2, 4.8], sh: [4.8, 3.5], ft: [3.3, 2.5], ua: [4.9, 3.9], fa: [3.9, 3.2] };
+
+  function shapes(ctx) {
+    const capsule = (a, b, r1, r2, col, glow) => {
+      const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy);
+      ctx.fillStyle = col;
+      if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = 7; }
+      ctx.beginPath();
+      if (len < 0.01) { ctx.arc(a[0], a[1], Math.max(r1, r2), 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; return; }
+      const ang = Math.atan2(dy, dx), d = Math.asin(Math.max(-1, Math.min(1, (r1 - r2) / len)));
+      ctx.arc(a[0], a[1], r1, ang + Math.PI / 2 + d, ang + (3 * Math.PI) / 2 - d);
+      ctx.arc(b[0], b[1], r2, ang - Math.PI / 2 - d, ang + Math.PI / 2 + d);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    };
+    const limb = (pts, radii, col, glow) => { for (let i = 0; i < pts.length - 1; i++) capsule(pts[i], pts[i + 1], radii[i], radii[i + 1], col, glow); };
+    const disc = (p, r, col) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, Math.PI * 2); ctx.fill(); };
+    return { capsule, limb, disc };
+  }
+
+  /** Desenha só o corpo. F: { work, rest, far, glow } — cores já resolvidas. */
+  function drawFigure(ctx, pat, pose, F, held) {
+    const { capsule, limb, disc } = shapes(ctx);
+    const hl = (part) => pat.hl.includes(part);
+    const col = (part) => (hl(part) ? F.work : F.rest);
+    const glow = (part) => (hl(part) && F.glow ? F.glow : null);
+    const legR = [R.th[0], R.th[1], R.sh[1], R.ft[1]];
+    const armR = [R.ua[0], R.ua[1], R.fa[1]];
+
+    if (pose.view === 'side') {
+      const j = solveSide(pose);
+      const tv = [j.sh[0] - j.hip[0], j.sh[1] - j.hip[1]], tl = Math.hypot(tv[0], tv[1]) || 1;
+      const td = [tv[0] / tl, tv[1] / tl];
+      let f = [-td[1], td[0]];
+      if (pat.faceDown) f = [-f[0], -f[1]];
+      // membros de trás
+      limb([j.hip, j.kF, j.ankF, j.toeF], legR, F.far);
+      limb([j.sh, j.eF, j.hF], armR, F.far);
+      if (held) held(j, true);
+      // tronco e cabeça (separada do corpo)
+      capsule(j.hip, j.sh, R.torsoHip, R.torsoSh, col('torso'), glow('torso'));
+      const head = [j.sh[0] + td[0] * (R.torsoSh + R.gap + R.head) + f[0] * 1.5, j.sh[1] + td[1] * (R.torsoSh + R.gap + R.head) + f[1] * 1.5];
+      disc(head, R.head, F.rest);
+      capsule([head[0] + f[0] * 6, head[1] + f[1] * 6], [head[0] + f[0] * 10.6, head[1] + f[1] * 10.6 - td[1] * 0], 2.8, 2.2, F.rest); // nariz
+      // membros da frente
+      limb([j.hip, j.kN, j.ankN, j.toeN], legR, col('leg'), glow('leg'));
+      limb([j.sh, j.eN, j.hN], armR, col('arm'), glow('arm'));
+      if (held) held(j, false);
+      return j;
+    }
+    const j = solveFront(pose);
+    const [r, l] = j.sides;
+    // pernas
+    [r, l].forEach((sd) => limb([sd.hp, sd.k, sd.a, [sd.a[0] + sd.s * 6, sd.a[1]]], legR, col('leg'), glow('leg')));
+    // tronco: ombros, quadril e coluna
+    const top = [100, r.sh[1] + 1], bot = [100, r.hp[1] - 1];
+    capsule(top, bot, 8.6, 7.4, col('torso'), glow('torso'));
+    capsule(r.sh, l.sh, 5.4, 5.4, col('torso'));
+    capsule(r.hp, l.hp, 6.2, 6.2, col('torso'));
+    disc([100, r.sh[1] - R.torsoSh - R.gap - R.head + 4], R.head, F.rest);
+    // braços
+    [r, l].forEach((sd) => limb([sd.sh, sd.e, sd.h], armR, col('arm'), glow('arm')));
+    if (held) held(j, false);
+    return j;
+  }
+
+  /* ---------- Desenho da animação ---------- */
+
   function draw(ctx, key, phase, C, opts = {}) {
     const pat = PATTERNS[key];
     const tl = opts.u != null ? { u: opts.u, stage: opts.stage || 'go' } : timeline(key, phase);
@@ -531,111 +619,57 @@
     const W = 200, H = 170;
     ctx.save();
     ctx.clearRect(0, 0, W, H);
+    if (C.bg) { ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H); }
     ctx.translate(0, 12);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
     const line = (a, b, color, w) => { ctx.strokeStyle = color; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); };
-    const poly = (pts, color, w) => { ctx.strokeStyle = color; ctx.lineWidth = w; ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.stroke(); };
     const dot = (p, r, color) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, Math.PI * 2); ctx.fill(); };
     const rrect = (x, y, w, h, r, color) => { ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill(); };
 
     // chão
     line([14, FLOOR + 1.5], [186, FLOOR + 1.5], C.floor, 2);
-    const guide = () => drawGuide(ctx, key, pat, tl.u, tl.stage, C) || {};
 
-    const hl = (part) => pat.hl.includes(part);
-    const LW = 5.5;
-
+    const F = { work: C.work, rest: C.rest, far: C.far, glow: C.glow };
     if (pose.view === 'side') {
       const j = solveSide(pose);
       const ref = (at) => j[at] || pose.hip;
-      const props = pat.props;
-      const drawProp = (pr) => {
-        switch (pr.k) {
-          case 'seat': rrect(pr.x, pr.y, pr.w, 6, 3, C.equip); line([pr.x + pr.w / 2, pr.y + 6], [pr.x + pr.w / 2, FLOOR], C.equip, 3); break;
-          case 'beam': line(pr.a, pr.b, C.equip, pr.w); break;
-          case 'leg': line(pr.a, pr.b, C.equip, 3); break;
-          case 'rail': line(pr.a, pr.b, C.floor, 2); break;
-          case 'box': rrect(pr.x, pr.y, pr.w, pr.h, 4, C.equip); break;
-          case 'block': rrect(pr.x, pr.y, pr.w, pr.h, 2, C.equip); break;
-          case 'cable': { const t = ref(pr.to); line(pr.from, t, C.cable, 1.6); dot(pr.from, 3.5, C.cable); break; }
-          case 'pad': { const p = ref(pr.at); dot([p[0] + (pr.dx || 0), p[1] + (pr.dy || 0)], pr.r, C.equip); break; }
-          case 'platform': {
-            // plataforma paralela à sola, logo atrás dela (no sentido do trilho)
-            const mid = [(j.ankN[0] + j.toeN[0]) / 2, (j.ankN[1] + j.toeN[1]) / 2];
-            const c = [mid[0] + 5 * Math.SQRT1_2, mid[1] - 5 * Math.SQRT1_2];
-            const d = [Math.SQRT1_2, Math.SQRT1_2];
-            line([c[0] - d[0] * 16, c[1] - d[1] * 16], [c[0] + d[0] * 16, c[1] + d[1] * 16], C.equip, 6);
-            break;
+      drawProps(ctx, pat, j, ref, C, { line, dot, rrect });
+      drawFigure(ctx, pat, pose, F, (jj, far) => {
+        const r2 = (at) => jj[at] || pose.hip;
+        pat.props.filter((pr) => ['db', 'handle', 'bar'].includes(pr.k) && !!pr.far === far).forEach((pr) => {
+          const p = r2(pr.at);
+          const c = far ? C.equip : C.weight;
+          if (pr.k === 'db') rrect(p[0] - 7, p[1] - 4, 14, 8, 4, c);
+          if (pr.k === 'handle') dot(p, 3.4, C.cable);
+          if (pr.k === 'bar') {
+            const y = p[1] + (pr.dy || 0);
+            if (pr.plate) dot([p[0], y], 10.5, C.weight);
+            else line([p[0] - pr.w / 2, y], [p[0] + pr.w / 2, y], C.weight, 4);
           }
-          default: break;
-        }
-      };
-      const drawHeld = (pr) => {
-        const p = ref(pr.at);
-        const c = pr.far ? C.equip : C.weight;
-        if (pr.k === 'db') { rrect(p[0] - 6, p[1] - 3.5, 12, 7, 3, c); }
-        if (pr.k === 'handle') dot(p, 3.2, C.cable);
-        if (pr.k === 'bar') {
-          const y = p[1] + (pr.dy || 0);
-          if (pr.plate) dot([p[0], y], 10, C.weight);
-          else line([p[0] - pr.w / 2, y], [p[0] + pr.w / 2, y], C.weight, 3.5);
-        }
-      };
-      props.filter((pr) => !['db', 'handle', 'bar'].includes(pr.k)).forEach(drawProp);
-
-      // membros de trás
-      poly([j.hip, j.kF, j.ankF, j.toeF], C.far, LW);
-      poly([j.sh, j.eF, j.hF], C.far, LW);
-      props.filter((pr) => ['db', 'handle', 'bar'].includes(pr.k) && pr.far).forEach(drawHeld);
-      // tronco e cabeça
-      line(j.hip, j.sh, hl('torso') ? C.hl : C.body, LW + 1);
-      dot(j.head, L.head, C.body);
-      {
-        const tv = [j.sh[0] - j.hip[0], j.sh[1] - j.hip[1]], tl = Math.hypot(tv[0], tv[1]) || 1;
-        let f = [-tv[1] / tl, tv[0] / tl]; // perpendicular ao tronco, para frente
-        if (pat.faceDown) f = [-f[0], -f[1]];
-        const nose = [j.head[0] + f[0] * (L.head + 2.5), j.head[1] + f[1] * (L.head + 2.5)];
-        line([j.head[0] + f[0] * (L.head - 2), j.head[1] + f[1] * (L.head - 2)], nose, C.body, 3.4);
-        dot([j.head[0] + f[0] * 3.8 + (tv[0] / tl) * 2, j.head[1] + f[1] * 3.8 + (tv[1] / tl) * 2], 1.4, C.back); // olho
-      }
-      // membros da frente
-      poly([j.hip, j.kN, j.ankN, j.toeN], hl('leg') ? C.hl : C.body, LW);
-      poly([j.sh, j.eN, j.hN], hl('arm') ? C.hl : C.body, LW);
-      props.filter((pr) => ['db', 'handle', 'bar'].includes(pr.k) && !pr.far).forEach(drawHeld);
+        });
+      });
     } else {
       const j = solveFront(pose);
       for (const pr of pat.props) {
-        if (pr.k === 'seatF') { rrect(70, j.pelvis[1] - 2, 60, 7, 3, C.equip); line([100, j.pelvis[1] + 5], [100, FLOOR], C.equip, 3); rrect(84, j.pelvis[1] - 52, 32, 50, 5, C.back); }
+        if (pr.k === 'seatF') { rrect(70, j.pelvis[1] - 2, 60, 8, 4, C.equip); line([100, j.pelvis[1] + 5], [100, FLOOR], C.equip, 4); rrect(82, j.pelvis[1] - 54, 36, 52, 8, C.equipSoft); }
         if (pr.k === 'cableF') j.sides.forEach((sd) => { const from = [100 + sd.s * (pr.from[0] - 100), pr.from[1]]; line(from, sd.h, C.cable, 1.6); dot(from, 3.5, C.cable); });
         if (pr.k === 'bandF') j.sides.forEach((sd) => line(sd.h, [100, sd.h[1]], C.cable, 1.6));
       }
-      const [r, l] = j.sides;
-      const armC = hl('arm') ? C.hl : C.body, legC = hl('leg') ? C.hl : C.body;
-      // pernas
-      [r, l].forEach((sd) => poly([sd.hp, sd.k, sd.a, [sd.a[0] + sd.s * 6, sd.a[1]]], legC, LW));
-      // tronco
-      ctx.fillStyle = C.body;
-      line(j.neck, j.pelvis, hl('torso') ? C.hl : C.body, LW + 1);
-      line(r.sh, l.sh, C.body, LW);
-      line(r.hp, l.hp, C.body, LW);
-      dot(j.head, L.head, C.body);
-      dot([j.head[0] - 3.2, j.head[1] - 1], 1.4, C.back);
-      dot([j.head[0] + 3.2, j.head[1] - 1], 1.4, C.back);
-      // braços
-      [r, l].forEach((sd) => poly([sd.sh, sd.e, sd.h], armC, LW));
-      for (const pr of pat.props) {
-        if (pr.k === 'dbF') j.sides.forEach((sd) => (pr.vertical ? rrect(sd.h[0] - 3.5, sd.h[1] - 7, 7, 14, 3, C.weight) : rrect(sd.h[0] - 7, sd.h[1] - 3.5, 14, 7, 3, C.weight)));
-        if (pr.k === 'padF') j.sides.forEach((sd) => dot([sd.k[0] + sd.s * 6, sd.k[1]], 4.5, C.equip));
-      }
+      drawFigure(ctx, pat, pose, F, (jj) => {
+        for (const pr of pat.props) {
+          if (pr.k === 'dbF') jj.sides.forEach((sd) => (pr.vertical ? rrect(sd.h[0] - 4, sd.h[1] - 8, 8, 16, 4, C.weight) : rrect(sd.h[0] - 8, sd.h[1] - 4, 16, 8, 4, C.weight)));
+          if (pr.k === 'padF') jj.sides.forEach((sd) => dot([sd.k[0] + sd.s * 8, sd.k[1]], 5, C.equip));
+        }
+      });
     }
-    const arrowDir = guide();
+    const arrowDir = drawGuide(ctx, key, pat, tl.u, tl.stage, C) || {};
     ctx.restore();
 
     // instrução da etapa atual
     const m = MOVE[key];
-    if (m && C.arrow) {
+    if (m && C.arrow && !opts.noLabel) {
       const g = m[5] ? '' : glyph(arrowDir);
       const label = m[4] ? 'Segure a posição'
         : tl.stage === 'go' ? g + m[1]
@@ -643,11 +677,67 @@
         : tl.stage === 'hold' ? 'Segure 1 s' : 'Prepare';
       ctx.save();
       ctx.font = '700 11.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillStyle = tl.stage === 'go' || tl.stage === 'back' || m[4] ? C.arrow : C.far;
+      ctx.fillStyle = tl.stage === 'go' || tl.stage === 'back' || m[4] ? C.arrow : C.label2;
       ctx.textBaseline = 'top';
       ctx.fillText(label, 10, 9);
       ctx.restore();
     }
+  }
+
+  function drawProps(ctx, pat, j, ref, C, { line, dot, rrect }, iconMode = false) {
+    for (const pr of pat.props) {
+      switch (pr.k) {
+        case 'seat': rrect(pr.x, pr.y, pr.w, 7, 3.5, C.equip); if (!iconMode) line([pr.x + pr.w / 2, pr.y + 6], [pr.x + pr.w / 2, FLOOR], C.equip, 4); break;
+        case 'beam': line(pr.a, pr.b, C.equip, pr.w + 1); break;
+        case 'leg': if (!iconMode) line(pr.a, pr.b, C.equip, 4); break;
+        case 'rail': if (!iconMode) line(pr.a, pr.b, C.floor, 2); break;
+        case 'box': rrect(pr.x, pr.y, pr.w, pr.h, 6, C.equip); break;
+        case 'block': rrect(pr.x, pr.y, pr.w, pr.h, 3, C.equip); break;
+        case 'cable': if (!iconMode) { const t = ref(pr.to); line(pr.from, t, C.cable, 1.6); dot(pr.from, 3.5, C.cable); } break;
+        case 'pad': { const p = ref(pr.at); dot([p[0] + (pr.dx || 0), p[1] + (pr.dy || 0)], pr.r + 0.8, C.equip); break; }
+        case 'platform': {
+          // plataforma paralela à sola, logo atrás dela (no sentido do trilho)
+          const mid = [(j.ankN[0] + j.toeN[0]) / 2, (j.ankN[1] + j.toeN[1]) / 2];
+          const c = [mid[0] + 6.5 * Math.SQRT1_2, mid[1] - 6.5 * Math.SQRT1_2];
+          const d = [Math.SQRT1_2, Math.SQRT1_2];
+          line([c[0] - d[0] * 17, c[1] - d[1] * 17], [c[0] + d[0] * 17, c[1] + d[1] * 17], C.equip, 7);
+          break;
+        }
+        default: break;
+      }
+    }
+  }
+
+  /* ---------- Ícone estático (cartões das rotinas) ---------- */
+
+  function icon(canvas, key, u = 0.85) {
+    const pat = PATTERNS[key]; if (!pat) return;
+    const cs = getComputedStyle(canvas);
+    const v = (n) => cs.getPropertyValue(n).trim();
+    const lime = v('--ring-green'), card = mix(v('--surface'), lime, 0.12);
+    const C = { equip: mix(card, lime, 0.28), floor: 'transparent', cable: 'transparent', weight: mix(card, lime, 0.55) };
+    const F = { work: lime, rest: lime, far: mix(card, lime, 0.45) };
+    const pose = poseU(pat, u);
+    const dpr = Math.min(3, window.devicePixelRatio || 1);
+    const size = canvas.clientWidth || 64;
+    canvas.width = size * dpr; canvas.height = size * dpr;
+    const ctx = canvas.getContext('2d');
+    // enquadra a figura (e o aparelho) no ícone
+    const j = pose.view === 'side' ? solveSide(pose) : solveFront(pose);
+    const pts = [];
+    const walk = (o) => { if (Array.isArray(o) && typeof o[0] === 'number') pts.push(o); else if (o && typeof o === 'object') Object.values(o).forEach(walk); };
+    walk(j);
+    pat.props.forEach((pr) => { if (pr.k === 'box' || pr.k === 'seat') { pts.push([pr.x, pr.y], [pr.x + pr.w, pr.y + (pr.h || 7)]); } if (pr.k === 'beam') pts.push(pr.a, pr.b); });
+    let x0 = Math.min(...pts.map((p) => p[0])) - 10, x1 = Math.max(...pts.map((p) => p[0])) + 10;
+    let y0 = Math.min(...pts.map((p) => p[1])) - 22, y1 = Math.max(...pts.map((p) => p[1])) + 8;
+    const sc = size / Math.max(x1 - x0, y1 - y0);
+    ctx.setTransform(dpr * sc, 0, 0, dpr * sc, dpr * (size - (x1 - x0) * sc) / 2 - dpr * x0 * sc, dpr * (size - (y1 - y0) * sc) / 2 - dpr * y0 * sc);
+    ctx.lineCap = 'round';
+    const line = (a, b, color, w) => { ctx.strokeStyle = color; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); };
+    const dot = (p, r, color) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, Math.PI * 2); ctx.fill(); };
+    const rrect = (x, y, w, h, r, color) => { ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill(); };
+    if (pose.view === 'side') drawProps(ctx, pat, j, (at) => j[at] || pose.hip, C, { line, dot, rrect }, true);
+    drawFigure(ctx, pat, pose, F);
   }
 
   /* ---------- Player ---------- */
@@ -655,7 +745,14 @@
   function colors(el) {
     const cs = getComputedStyle(el);
     const v = (n) => cs.getPropertyValue(n).trim();
-    return { arrow: v('--yellow'), body: v('--text'), far: v('--muted'), hl: v('--ring-green'), equip: v('--separator'), back: v('--surface-2'), floor: v('--separator'), cable: v('--ring-cyan'), weight: v('--muted') };
+    const lime = v('--ring-green'), text = v('--text');
+    const bg = mix(v('--surface') || '#1c1c1e', lime, 0.1);
+    return {
+      bg, work: lime, glow: lime, rest: mix(bg, lime, 0.7), far: mix(bg, lime, 0.36),
+      arrow: text, label2: v('--muted'),
+      equip: mix(bg, text, 0.2), equipSoft: mix(bg, text, 0.1), floor: mix(bg, text, 0.18),
+      cable: v('--ring-cyan'), weight: mix(bg, text, 0.42),
+    };
   }
 
   let raf = null;
@@ -666,7 +763,6 @@
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const C = colors(canvas);
-    C.back = C.back || '#000';
     const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const period = 3600;
     const t0 = performance.now();
@@ -683,5 +779,5 @@
   }
   function stop() { if (raf) cancelAnimationFrame(raf); raf = null; }
 
-  window.ExAnim = { PATTERNS, MOVE, animFor, draw, play, stop, colors, timeline };
+  window.ExAnim = { PATTERNS, MOVE, animFor, draw, play, stop, colors, timeline, icon };
 })();

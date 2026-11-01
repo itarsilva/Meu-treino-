@@ -443,7 +443,7 @@ details > summary::-webkit-details-marker { display: none; }
 .demo-tips li::marker { color: var(--green); }
 .demo-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin-top: 6px; }
 .demo-legend > span { display: inline-flex; align-items: center; gap: 6px; }
-.hl-swatch.arrow { background: var(--yellow); }
+.hl-swatch.arrow { background: var(--text); }
 .hl-swatch { width: 14px; height: 4px; border-radius: 2px; background: var(--ring-green); }
 .demo-btn {
   display: inline-flex; align-items: center; gap: 4px;
@@ -453,3 +453,31 @@ details > summary::-webkit-details-marker { display: none; }
 }
 .demo-btn svg { width: 14px; height: 14px; }
 .sheet-panel { max-height: calc(100% - 20px); overflow-y: auto; }
+
+/* ---------- Cartões de treino (estilo app de exercícios) ---------- */
+.wk-list { display: grid; gap: 12px; margin-bottom: 12px; }
+.wk-card {
+  display: grid; gap: 2px; text-align: left; width: 100%;
+  border: 0; border-radius: 24px; padding: 18px 18px 20px;
+  background: color-mix(in srgb, var(--ring-green) 12%, var(--surface));
+  color: var(--text);
+}
+.wk-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+.wk-icon { width: 64px; height: 64px; display: block; }
+.wk-icon-fallback { display: grid; place-items: center; color: var(--ring-green); }
+.wk-icon-fallback svg { width: 40px; height: 40px; }
+.wk-play {
+  width: 52px; height: 52px; border-radius: 50%; flex: none;
+  display: grid; place-items: center;
+  background: var(--ring-green); color: var(--on-accent);
+}
+.wk-play svg { width: 22px; height: 22px; margin-left: 3px; }
+.wk-eyebrow { font-size: 13px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--green); }
+.wk-title { font-size: 24px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.15; text-wrap: balance; }
+.wk-sub { font-size: 15px; color: var(--muted); margin-top: 4px; display: flex; gap: 8px; align-items: center; }
+.wk-next {
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+  background: var(--ring-green); color: var(--on-accent);
+  border-radius: 999px; padding: 2px 8px;
+}
+.demo-canvas { background: color-mix(in srgb, var(--ring-green) 10%, var(--surface)); }
