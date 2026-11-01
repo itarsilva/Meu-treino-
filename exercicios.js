@@ -59,10 +59,10 @@
     },
     rowBent: {
       title: 'Remada apoiada', hl: ['arm'],
-      props: [{ k: 'beam', a: [84, 118], b: [128, 76], w: 7 }, { k: 'leg', a: [96, 112], b: [96, 150] }, { k: 'db', at: 'hN' }],
+      props: [{ k: 'beam', a: [96, 106], b: [132, 74], w: 7 }, { k: 'leg', a: [112, 92], b: [112, 150] }, { k: 'db', at: 'hN' }],
       poses: [
-        P({ hip: [84, 100], torso: 52, aN: [2, 0], aF: [-2, -2], fN: [70, 150], fF: [64, 150], kN: -1, kF: -1 }),
-        P({ hip: [84, 100], torso: 52, aN: [-82, 0], aF: [-2, -2], fN: [70, 150], fF: [64, 150], kN: -1, kF: -1 }),
+        P({ hip: [88, 92], torso: 50, aN: [2, 0], aF: [-2, -2], fN: [66, 150], fF: [60, 150], kN: -1, kF: -1 }),
+        P({ hip: [88, 92], torso: 50, aN: [-82, 0], aF: [-2, -2], fN: [66, 150], fF: [60, 150], kN: -1, kF: -1 }),
       ],
       tips: ['Peito apoiado no banco protege a lombar.', 'Puxe o cotovelo em direção ao quadril.', 'Não gire o tronco para subir o peso.'],
     },
@@ -136,7 +136,7 @@
       title: 'Supino', hl: ['arm'],
       props: [{ k: 'beam', a: [56, 128], b: [126, 128], w: 7 }, { k: 'leg', a: [70, 131], b: [70, 150] }, { k: 'leg', a: [114, 131], b: [114, 150] }, { k: 'bar', at: 'hN', w: 6, plate: true }],
       poses: [
-        P({ hip: [116, 120], torso: -90, aN: [18, 178], aF: [14, 176], fN: [146, 150], fF: [142, 150] }),
+        P({ hip: [116, 120], torso: -90, aN: [62, 176], aF: [58, 174], fN: [146, 150], fF: [142, 150] }),
         P({ hip: [116, 120], torso: -90, aN: [178, 178], aF: [176, 176], fN: [146, 150], fF: [142, 150] }),
       ],
       tips: ['Escápulas juntas e peito aberto.', 'Desça controlando até perto do peito.', 'Empurre sem tirar o quadril do banco.'],
@@ -241,8 +241,8 @@
       title: 'Elevação pélvica', hl: ['leg'],
       props: [{ k: 'box', x: 16, y: 114, w: 34, h: 36 }, { k: 'bar', at: 'hip', w: 6, plate: true, dy: -5 }],
       poses: [
-        P({ hip: [86, 136], torso: -55.6, fN: [126, 150], fF: [122, 150], aN: [40, 80], aF: [38, 78], kN: 1, kF: 1 }),
-        P({ hip: [94, 110], torso: -90, fN: [126, 150], fF: [122, 150], aN: [150, 92], aF: [148, 90], kN: 1, kF: 1 }),
+        P({ hip: [86, 136], torso: -55.6, fN: [126, 150], fF: [122, 150], hN: 'hip', hoN: [2, -6], hF: 'hip', hoF: [-2, -6], eN: -1, eF: -1, kN: -1, kF: -1 }),
+        P({ hip: [94, 110], torso: -90, fN: [126, 150], fF: [122, 150], hN: 'hip', hoN: [2, -6], hF: 'hip', hoF: [-2, -6], eN: -1, eF: -1, kN: -1, kF: -1 }),
       ],
       tips: ['Costas apoiadas no banco na altura das escápulas.', 'Suba contraindo o glúteo, sem arquear a lombar.', 'No alto, joelhos a 90° e queixo para baixo.'],
     },
@@ -274,8 +274,8 @@
       title: 'Bird dog', hl: ['arm', 'leg', 'torso'],
       props: [],
       poses: [
-        P({ hip: [124, 118], torso: -92, aN: [358, 4], aF: [2, 6], lN: [0, 90], lF: [0, 90], ftN: 90, ftF: 90 }),
-        P({ hip: [124, 118], torso: -92, aN: [266, 268], aF: [2, 6], lN: [0, 90], lF: [96, 94], ftN: 90, ftF: 90 }),
+        P({ hip: [124, 118], torso: -70, aN: [0, 0], aF: [0, 0], lN: [0, 90], lF: [0, 90], ftN: 90, ftF: 90 }),
+        P({ hip: [124, 118], torso: -70, aN: [-98, -94], aF: [0, 0], lN: [0, 90], lF: [92, 90], ftN: 90, ftF: 90 }),
       ],
       tips: ['Apoio de mãos e joelhos, coluna reta.', 'Estique um braço e a perna oposta sem girar o quadril.', 'Segure 2 segundos e troque o lado.'],
     },
@@ -347,7 +347,8 @@
     for (const s of ['N', 'F']) {
       const ang = p['a' + s];
       if (p['h' + s]) {
-        [j['e' + s], j['h' + s]] = ik(j.sh, p['h' + s], L.ua, L.fa, p['e' + s]);
+        const tgt = typeof p['h' + s] === 'string' ? add(j[p['h' + s]] || p.hip, p['ho' + s] || [0, 0]) : p['h' + s];
+        [j['e' + s], j['h' + s]] = ik(j.sh, tgt, L.ua, L.fa, p['e' + s]);
       } else {
         j['e' + s] = add(j.sh, dir(ang[0]), L.ua);
         j['h' + s] = add(j['e' + s], dir(ang[1]), L.fa);
