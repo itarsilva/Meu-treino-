@@ -441,7 +441,9 @@ details > summary::-webkit-details-marker { display: none; }
 .demo-title { margin: 6px 0 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; text-align: center; text-wrap: balance; }
 .demo-tips { margin: 4px 0 0; padding: 0 0 0 20px; display: grid; gap: 6px; font-size: 15px; justify-self: stretch; }
 .demo-tips li::marker { color: var(--green); }
-.demo-legend { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.demo-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin-top: 6px; }
+.demo-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.hl-swatch.arrow { background: var(--yellow); }
 .hl-swatch { width: 14px; height: 4px; border-radius: 2px; background: var(--ring-green); }
 .demo-btn {
   display: inline-flex; align-items: center; gap: 4px;

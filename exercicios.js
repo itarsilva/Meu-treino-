@@ -233,7 +233,7 @@
       props: [{ k: 'seat', x: 62, y: 114, w: 44 }, { k: 'pad', at: 'kN', r: 5, dy: -7 }],
       poses: [
         P({ hip: [86, 110], torso: 4, lN: [90, 0], lF: [88, -2], ftN: 90, ftF: 90, aN: [30, 60], aF: [28, 58] }),
-        P({ hip: [86, 110], torso: 4, lN: [79, -6], lF: [77, -8], ftN: 38, ftF: 38, aN: [30, 60], aF: [28, 58] }),
+        P({ hip: [86, 110], torso: 4, lN: [99, -5], lF: [97, -7], ftN: 40, ftF: 40, aN: [30, 60], aF: [28, 58] }),
       ],
       tips: ['Pontas dos pés na plataforma e calcanhar livre.', 'Suba ao máximo e segure 1 segundo.', 'Desça até alongar bem.'],
     },
@@ -296,6 +296,41 @@
     },
   };
 
+  /* Direção do movimento: [ponto que se move, instrução da ida, instrução da volta, ida é a parte lenta?] */
+  const MOVE = {
+    pulldown: ['hN', 'Puxe para baixo', 'Suba devagar'],
+    rowSeated: ['hN', 'Puxe para trás', 'Volte devagar'],
+    rowBent: ['hN', 'Puxe para cima', 'Desça devagar'],
+    facePull: ['hands', 'Puxe e abra', 'Volte devagar'],
+    reverseFly: ['hands', 'Abra os braços', 'Feche devagar'],
+    fly: ['hands', 'Feche os braços', 'Abra devagar'],
+    curl: ['hN', 'Suba', 'Desça devagar'],
+    scott: ['hN', 'Suba', 'Desça devagar'],
+    pushdown: ['hN', 'Empurre para baixo', 'Suba devagar'],
+    overhead: ['hN', 'Estique para cima', 'Desça devagar'],
+    incline: ['hN', 'Empurre para cima', 'Desça devagar'],
+    flat: ['hN', 'Empurre para cima', 'Desça devagar'],
+    press: ['hands', 'Empurre para cima', 'Desça devagar'],
+    lateral: ['hands', 'Suba até o ombro', 'Desça devagar'],
+    extRot: ['hands', 'Gire para fora', 'Volte devagar'],
+    legPress: ['ankN', 'Empurre', 'Desça devagar'],
+    legPressUni: ['ankN', 'Empurre', 'Desça devagar'],
+    split: ['hip', 'Desça devagar', 'Suba', true],
+    squat: ['hip', 'Desça devagar', 'Suba', true],
+    legExt: ['ankN', 'Estique', 'Desça devagar'],
+    legCurlSeated: ['ankN', 'Puxe para trás', 'Volte devagar'],
+    legCurlLying: ['ankN', 'Dobre os joelhos', 'Estique devagar'],
+    calf: ['hip', 'Suba na ponta', 'Desça devagar'],
+    calfSeated: ['kN', 'Suba na ponta', 'Desça devagar'],
+    hipThrust: ['hip', 'Suba o quadril', 'Desça devagar'],
+    rdl: ['sh', 'Desça o tronco', 'Suba contraindo', true],
+    abductor: ['knees', 'Abra as pernas', 'Feche devagar'],
+    deadbug: ['hN', 'Estique braço e perna', 'Volte', false, false, true],
+    birddog: ['hN', 'Estique braço e perna', 'Volte', false, false, true],
+    plank: ['hip', 'Segure', 'Segure', false, true],
+    pallof: ['hN', 'Empurre à frente', 'Volte'],
+  };
+
   const RULES = [
     ['puxada', 'pulldown'], ['remada baixa', 'rowSeated'], ['remada', 'rowBent'], ['face pull', 'facePull'],
     ['crucifixo inverso', 'reverseFly'], ['crucifixo', 'fly'], ['rosca scott', 'scott'], ['rosca', 'curl'],
@@ -327,14 +362,31 @@
     for (const k of Object.keys(p1)) out[k] = k in p2 ? lerp(p1[k], p2[k], t) : p1[k];
     return out;
   }
-  function poseAt(pattern, phase) {
-    // phase 0..1: ida e volta pelas poses, com suavização
+  /** u = 0..1 ao longo das poses (0 = início, 1 = fim do movimento). */
+  function poseU(pattern, u) {
     const ps = pattern.poses;
-    const tri = phase < 0.5 ? phase * 2 : 2 - phase * 2;
-    const eased = (1 - Math.cos(Math.PI * tri)) / 2;
-    const pos = eased * (ps.length - 1);
+    const pos = Math.min(1, Math.max(0, u)) * (ps.length - 1);
     const i = Math.min(ps.length - 2, Math.floor(pos));
     return blend(ps[i], ps[i + 1], pos - i);
+  }
+
+  /** Tempo do ciclo (0..1) -> posição u e etapa. A fase de força é rápida, a volta é lenta. */
+  function timeline(key, phase) {
+    const m = MOVE[key] || [];
+    const slowFirst = !!m[3];
+    const steps = slowFirst
+      ? [['go', 0.46], ['hold', 0.1], ['back', 0.3], ['rest', 0.14]]
+      : [['go', 0.3], ['hold', 0.12], ['back', 0.46], ['rest', 0.12]];
+    let t = phase;
+    for (const [stage, dur] of steps) {
+      if (t <= dur) {
+        const x = t / dur, e = (1 - Math.cos(Math.PI * x)) / 2;
+        const u = stage === 'go' ? e : stage === 'back' ? 1 - e : stage === 'hold' ? 1 : 0;
+        return { u, stage };
+      }
+      t -= dur;
+    }
+    return { u: 0, stage: 'rest' };
   }
 
   /* ---------- Esqueleto ---------- */
@@ -384,9 +436,98 @@
 
   /* ---------- Desenho ---------- */
 
-  function draw(ctx, key, phase, C) {
+  function effPoints(key, pose) {
+    const m = MOVE[key]; if (!m) return [];
+    if (pose.view === 'front') {
+      const j = solveFront(pose);
+      return j.sides.map((sd) => (m[0] === 'knees' ? sd.k : sd.h));
+    }
+    const j = solveSide(pose);
+    return [j[m[0]] || pose.hip];
+  }
+
+  function drawGuide(ctx, key, pat, u, stage, C) {
+    const m = MOVE[key]; if (!m) return;
+    const N = 28;
+    const paths = [];
+    for (let i = 0; i <= N; i++) effPoints(key, poseU(pat, i / N)).forEach((p, k) => { (paths[k] = paths[k] || []).push(p); });
+    const iso = !!m[4];
+    // trilha tracejada do caminho completo
+    if (!iso) {
+      ctx.save();
+      ctx.strokeStyle = C.arrow; ctx.globalAlpha = 0.45; ctx.lineWidth = 1.6; ctx.setLineDash([2.5, 3.5]);
+      paths.forEach((pts) => { ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.stroke(); });
+      ctx.restore();
+    }
+    // direção geral da ida (do início ao fim do caminho)
+    const p0 = paths[0][0], p1 = paths[0][N];
+    const total = [p1[0] - p0[0], p1[1] - p0[1]];
+    const pathLen = paths[0].reduce((acc, p, i) => (i ? acc + Math.hypot(p[0] - paths[0][i - 1][0], p[1] - paths[0][i - 1][1]) : 0), 0);
+    const moving = stage === 'go' || stage === 'back';
+    const forward = stage === 'go';
+    const arrowDir = moving && !iso ? (forward ? total : [-total[0], -total[1]]) : null;
+
+    const head = (end, ang, size = 7) => {
+      ctx.beginPath();
+      ctx.moveTo(end[0] + Math.cos(ang) * 4, end[1] + Math.sin(ang) * 4);
+      ctx.lineTo(end[0] + Math.cos(ang + 2.5) * size, end[1] + Math.sin(ang + 2.5) * size);
+      ctx.lineTo(end[0] + Math.cos(ang - 2.5) * size, end[1] + Math.sin(ang - 2.5) * size);
+      ctx.closePath(); ctx.fill();
+    };
+
+    // movimento curto (panturrilha): seta fixa ao lado do ponto que se move
+    if (moving && !iso && pathLen < 20) {
+      const d = arrowDir, dl = Math.hypot(d[0], d[1]) || 1;
+      effPoints(key, poseU(pat, u)).forEach((cur, k) => {
+        const sg = k === 0 ? 1 : -1; // vista de frente: espelha no lado esquerdo
+        const ux = (sg * d[0]) / dl, uy = d[1] / dl;
+        const base = [cur[0] + sg * 16, cur[1]];
+        const a = [base[0] - ux * 8, base[1] - uy * 8], b = [base[0] + ux * 8, base[1] + uy * 8];
+        ctx.save();
+        ctx.strokeStyle = C.arrow; ctx.fillStyle = C.arrow; ctx.lineWidth = 3; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+        head(b, Math.atan2(uy, ux));
+        ctx.restore();
+      });
+      return { dir: arrowDir, front: pat.poses[0].view === 'front' };
+    }
+
+    if (moving && !iso) {
+      paths.forEach((pts) => {
+        const a = u * N;
+        const span = 7; // ~25% do caminho à frente
+        const from = Math.max(0, Math.min(N, Math.round(a)));
+        const to = Math.max(0, Math.min(N, from + (forward ? span : -span)));
+        if (from === to) return;
+        const seg = [];
+        for (let i = from; forward ? i <= to : i >= to; i += forward ? 1 : -1) seg.push(pts[i]);
+        if (seg.length < 2) return;
+        const end = seg[seg.length - 1], prev = seg[seg.length - 2];
+        const d0 = seg[0], len = Math.hypot(end[0] - d0[0], end[1] - d0[1]);
+        if (len < 4) return;
+        ctx.save();
+        ctx.strokeStyle = C.arrow; ctx.fillStyle = C.arrow; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.beginPath(); seg.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.stroke();
+        head(end, Math.atan2(end[1] - prev[1], end[0] - prev[0]));
+        ctx.restore();
+      });
+    }
+    return { dir: arrowDir, front: pat.poses[0].view === 'front' };
+  }
+
+  function glyph(g) {
+    if (!g || !g.dir) return '';
+    const [x, y] = g.dir;
+    if (Math.abs(y) >= Math.abs(x) * 0.8) return y < 0 ? '↑ ' : '↓ ';
+    // vista de frente: os dois braços/pernas abrem ou fecham juntos
+    if (g.front) return x > 0 ? '←→ ' : '→← ';
+    return x > 0 ? '→ ' : '← ';
+  }
+
+  function draw(ctx, key, phase, C, opts = {}) {
     const pat = PATTERNS[key];
-    const pose = poseAt(pat, phase);
+    const tl = opts.u != null ? { u: opts.u, stage: opts.stage || 'go' } : timeline(key, phase);
+    const pose = poseU(pat, tl.u);
     const W = 200, H = 170;
     ctx.save();
     ctx.clearRect(0, 0, W, H);
@@ -401,6 +542,7 @@
 
     // chão
     line([14, FLOOR + 1.5], [186, FLOOR + 1.5], C.floor, 2);
+    const guide = () => drawGuide(ctx, key, pat, tl.u, tl.stage, C) || {};
 
     const hl = (part) => pat.hl.includes(part);
     const LW = 5.5;
@@ -475,7 +617,24 @@
         if (pr.k === 'padF') j.sides.forEach((sd) => dot([sd.k[0] + sd.s * 6, sd.k[1]], 4.5, C.equip));
       }
     }
+    const arrowDir = guide();
     ctx.restore();
+
+    // instrução da etapa atual
+    const m = MOVE[key];
+    if (m && C.arrow) {
+      const g = m[5] ? '' : glyph(arrowDir);
+      const label = m[4] ? 'Segure a posição'
+        : tl.stage === 'go' ? g + m[1]
+        : tl.stage === 'back' ? g + m[2]
+        : tl.stage === 'hold' ? 'Segure 1 s' : 'Prepare';
+      ctx.save();
+      ctx.font = '700 11.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillStyle = tl.stage === 'go' || tl.stage === 'back' || m[4] ? C.arrow : C.far;
+      ctx.textBaseline = 'top';
+      ctx.fillText(label, 10, 9);
+      ctx.restore();
+    }
   }
 
   /* ---------- Player ---------- */
@@ -483,7 +642,7 @@
   function colors(el) {
     const cs = getComputedStyle(el);
     const v = (n) => cs.getPropertyValue(n).trim();
-    return { body: v('--text'), far: v('--muted'), hl: v('--ring-green'), equip: v('--separator'), back: v('--surface-2'), floor: v('--separator'), cable: v('--ring-cyan'), weight: v('--muted') };
+    return { arrow: v('--yellow'), body: v('--text'), far: v('--muted'), hl: v('--ring-green'), equip: v('--separator'), back: v('--surface-2'), floor: v('--separator'), cable: v('--ring-cyan'), weight: v('--muted') };
   }
 
   let raf = null;
@@ -495,17 +654,20 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const C = colors(canvas);
     const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const period = 2600;
+    const period = 3600;
     const t0 = performance.now();
     const frame = (now) => {
-      let phase = ((now - t0) % period) / period;
-      if (reduce) phase = phase < 0.5 ? 0 : 0.5; // alterna as posições sem movimento contínuo
-      draw(ctx, key, phase, C);
+      const phase = ((now - t0) % period) / period;
+      if (reduce) {
+        // sem movimento contínuo: mostra início e fim, com a seta da direção
+        const first = phase < 0.5;
+        draw(ctx, key, 0, C, { u: first ? 0 : 1, stage: first ? 'go' : 'back' });
+      } else draw(ctx, key, phase, C);
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
   }
   function stop() { if (raf) cancelAnimationFrame(raf); raf = null; }
 
-  window.ExAnim = { PATTERNS, animFor, draw, play, stop, colors };
+  window.ExAnim = { PATTERNS, MOVE, animFor, draw, play, stop, colors, timeline };
 })();
