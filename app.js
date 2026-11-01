@@ -407,6 +407,7 @@ function viewLive() {
       <section class="card exercise">
         <div class="exercise-head">
           <h3>${esc(ex.name)}</h3>
+          ${hasDemo(ex.name) ? `<button class="demo-btn" data-action="demo" data-name="${esc(ex.name)}" aria-label="Ver como fazer ${esc(ex.name)}">${ICON.play}Ver</button>` : ''}
           <button class="icon-btn" data-action="remove-ex" data-ei="${ei}" aria-label="Remover exercício">${ICON.trash}</button>
         </div>
         ${ex.target ? `<p class="target">Meta · ${ex.target.sets} × ${esc(ex.target.reps)}</p>` : ''}
@@ -703,6 +704,28 @@ function viewCorpo() {
   `;
 }
 
+function exerciseLibrary() {
+  const seen = new Set();
+  const groups = state.routines.map((r) => ({
+    name: r.name,
+    items: r.exercises.map(parseLine).filter((e) => hasDemo(e.name) && !seen.has(e.name) && seen.add(e.name)),
+  })).filter((g) => g.items.length);
+  if (!groups.length) return '';
+  return `
+    <p class="section-label">Como fazer cada exercício</p>
+    ${groups.map((g) => `
+      <p class="tiny muted" style="margin:10px 4px 6px">${esc(g.name)}</p>
+      <div class="list">
+        ${g.items.map((e) => `
+          <button class="list-row" data-action="demo" data-name="${esc(e.name)}" style="min-height:52px">
+            <span class="icon-badge" style="--c:var(--ring-green);width:30px;height:30px">${ICON.play}</span>
+            <span class="body"><span class="title" style="display:block">${esc(e.name)}</span></span>
+            ${e.target ? `<span class="tiny muted">${e.target.sets}×${esc(e.target.reps)}</span>` : ''}
+            <span class="chev">${ICON.chevron}</span>
+          </button>`).join('')}
+      </div>`).join('')}`;
+}
+
 function viewRotinas() {
   const g = state.goals;
   return `
@@ -721,6 +744,8 @@ function viewRotinas() {
     <button class="btn tinted" data-action="add-routine">${ICON.plus} Nova rotina</button>
     <div class="spacer"></div>
     <button class="btn tinted" data-action="load-plan">Restaurar plano da avaliação</button>
+
+    ${exerciseLibrary()}
 
     <p class="section-label">Metas semanais</p>
     <div class="list">
@@ -838,6 +863,7 @@ const actions = {
     state.workouts = state.workouts.filter((w) => w.id !== el.dataset.id);
     save(); render();
   },
+  demo: (el) => showDemo(el.dataset.name),
   pick: (el) => { progressExercise = el.dataset.name; render(); },
   mode: (el) => { progressMode = el.dataset.mode; render(); },
   'go-body': () => { tab = 'progresso'; progressMode = 'corpo'; render(); window.scrollTo(0, 0); },
@@ -931,8 +957,9 @@ const $sheet = document.getElementById('sheet');
 const $sheetBody = document.getElementById('sheet-body');
 let sheetDone = null;
 
-function openSheet(html, onChoose) {
+function openSheet(html, onChoose, cancelLabel = 'Cancelar') {
   $sheetBody.innerHTML = html;
+  $sheet.querySelector('.sheet-btn.cancel').textContent = cancelLabel;
   sheetDone = onChoose;
   $sheet.hidden = false;
   requestAnimationFrame(() => $sheet.classList.add('open'));
@@ -941,10 +968,29 @@ function openSheet(html, onChoose) {
 }
 
 function closeSheet(value) {
+  if (window.ExAnim) ExAnim.stop();
   $sheet.classList.remove('open');
   setTimeout(() => { $sheet.hidden = true; }, 200);
   const done = sheetDone; sheetDone = null;
   if (done) done(value);
+}
+
+const hasDemo = (name) => !!(window.ExAnim && ExAnim.animFor(name));
+
+function showDemo(name) {
+  const key = ExAnim.animFor(name);
+  if (!key) return;
+  const pat = ExAnim.PATTERNS[key];
+  const plan = state.routines.flatMap((r) => r.exercises.map(parseLine)).find((e) => e.name === name && e.target);
+  openSheet(`
+    <div class="demo">
+      <canvas class="demo-canvas" id="demo-canvas" role="img" aria-label="Animação do exercício ${esc(name)}"></canvas>
+      <h3 class="demo-title">${esc(name)}</h3>
+      ${plan ? `<p class="target" style="text-align:center">Meta · ${plan.target.sets} × ${esc(plan.target.reps)}</p>` : ''}
+      <ul class="demo-tips">${pat.tips.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
+      <p class="tiny muted demo-legend"><span class="hl-swatch"></span>em verde, a parte que trabalha</p>
+    </div>`, null, 'Fechar');
+  ExAnim.play(document.getElementById('demo-canvas'), key);
 }
 
 function ask(message, okLabel, destructive = true) {
