@@ -388,15 +388,43 @@ function viewResumo() {
 }
 
 /** "Antes de começar": aquecimento com botão Ver em cada exercício + cuidados da rotina. */
+/** Exercício aberto? Sem escolha do usuário, abre o primeiro que ainda não terminou. */
+function isOpen(cur, ei) {
+  const ex = cur.exercises[ei];
+  if (typeof ex.open === 'boolean') return ex.open;
+  const first = cur.exercises.findIndex((e) => !e.sets.length || e.sets.some((x) => !x.done));
+  return ei === first;
+}
+
+function fixOpenStates(cur) {
+  cur.exercises.forEach((e, i) => { e.open = isOpen(cur, i); });
+}
+
+function progressRing(done, total) {
+  const r = 13, c = 2 * Math.PI * r, pct = total ? done / total : 0;
+  return `<svg class="mini-ring" viewBox="0 0 32 32" aria-hidden="true">
+    <circle cx="16" cy="16" r="${r}" class="mini-track"/>
+    ${pct > 0 ? `<circle cx="16" cy="16" r="${r}" class="mini-bar" stroke-dasharray="${(c * pct).toFixed(2)} ${c.toFixed(2)}" transform="rotate(-90 16 16)"/>` : ''}
+    ${pct >= 1 ? '<path d="M10.5 16.5l3.5 3.5 7.5-8" class="mini-check"/>' : `<text x="16" y="20.5" text-anchor="middle" class="mini-num">${done}</text>`}
+  </svg>`;
+}
+
 function noteCard(note) {
-  // o aquecimento aparece em todo treino (rotinas, treino livre e rotinas novas)
+  // o aquecimento aparece em todo treino (rotinas, treino livre e rotinas novas); minimizado até tocar
   const hasWarm = true;
+  const open = !!(state.current && state.current.warmOpen);
   const extra = note.replace(WARMUP, '').replace(/^Aquecimento[^.]*\./, '').trim();
   return `
     <div class="card note">
-      <p class="eyebrow c-cyan">Antes de começar</p>
-      ${hasWarm ? `
-        <p class="small" style="font-weight:600">Aquecimento · 8 min</p>
+      <button class="fold-head" data-action="toggle-warm" aria-expanded="${open}">
+        <span class="grow">
+          <span class="eyebrow c-cyan" style="display:block">Antes de começar</span>
+          <span class="fold-title">Aquecimento · 8 min</span>
+          ${open ? '' : `<span class="tiny muted">${WARMUP_ITEMS.length} exercícios · toque para ver</span>`}
+        </span>
+        <span class="chev fold-chev ${open ? 'open' : ''}">${ICON.chevron}</span>
+      </button>
+      ${hasWarm && open ? `
         <div class="warm-list">
           ${WARMUP_ITEMS.map((w, i) => `
             <div class="warm-row">
@@ -452,10 +480,27 @@ function viewLive() {
 
     ${cur.exercises.map((ex, ei) => {
       const prev = lastPerformance(ex.name);
+      const done = ex.sets.filter((x) => x.done).length, total = ex.sets.length;
+      const complete = total > 0 && done === total;
+      if (!isOpen(cur, ei)) {
+        return `
+      <section class="card exercise mini ${complete ? 'complete' : ''}" data-ex="${ei}">
+        <button class="fold-head" data-action="toggle-ex" data-ei="${ei}" aria-expanded="false" aria-label="Abrir ${esc(ex.name)}">
+          ${progressRing(done, total)}
+          <span class="grow">
+            <span class="fold-title">${esc(ex.name)}</span>
+            <span class="tiny muted">${complete ? 'Concluído' : `${done} de ${total} séries`}${ex.target ? ` · meta ${ex.target.sets}×${esc(ex.target.reps)}` : ''}</span>
+          </span>
+          <span class="chev fold-chev">${ICON.chevron}</span>
+        </button>
+      </section>`;
+      }
       return `
-      <section class="card exercise">
+      <section class="card exercise" data-ex="${ei}">
         <div class="exercise-head">
-          <h3>${esc(ex.name)}</h3>
+          <button class="fold-head inline" data-action="toggle-ex" data-ei="${ei}" aria-expanded="true" aria-label="Minimizar ${esc(ex.name)}">
+            <h3>${esc(ex.name)}</h3><span class="chev fold-chev open">${ICON.chevron}</span>
+          </button>
           ${hasDemo(ex.name) ? `<button class="demo-btn" data-action="demo" data-name="${esc(ex.name)}" aria-label="Ver como fazer ${esc(ex.name)}">${ICON.play}Ver</button>` : ''}
           <button class="icon-btn" data-action="remove-ex" data-ei="${ei}" aria-label="Remover exercício">${ICON.trash}</button>
         </div>
@@ -765,7 +810,11 @@ function exerciseLibrary() {
   return `
     <p class="section-label">Como fazer cada exercício</p>
     ${groups.map((g) => `
-      <p class="tiny muted" style="margin:10px 4px 6px">${esc(g.name)}</p>
+      <details class="lib-group">
+      <summary class="list fold-head lib-head">
+        <span class="grow"><span class="fold-title">${esc(g.name)}</span><span class="tiny muted">${plural(g.items.length, 'exercício', 'exercícios')}</span></span>
+        <span class="chev fold-chev">${ICON.chevron}</span>
+      </summary>
       <div class="list">
         ${g.items.map((e) => `
           <button class="list-row" data-action="demo" data-name="${esc(e.name)}" ${e.dose ? `data-dose="${esc(e.dose)}"` : ''} style="min-height:52px">
@@ -774,7 +823,8 @@ function exerciseLibrary() {
             ${e.target ? `<span class="tiny muted">${e.target.sets}×${esc(e.target.reps)}</span>` : e.dose ? `<span class="tiny muted">${esc(e.dose)}</span>` : ''}
             <span class="chev">${ICON.chevron}</span>
           </button>`).join('')}
-      </div>`).join('')}`;
+      </div>
+      </details>`).join('')}`;
 }
 
 function viewRotinas() {
@@ -782,15 +832,19 @@ function viewRotinas() {
   return `
     ${header('Rotinas', 'Seus treinos fixos')}
     ${state.routines.map((r, i) => `
-      <div class="card routine-edit">
-        <div class="row">
+      <details class="card routine-edit fold">
+        <summary class="fold-head">
           <span class="icon-badge" style="--c:${ROUTINE_COLORS[i % ROUTINE_COLORS.length]}">${ICON.dumbbell}</span>
+          <span class="grow"><span class="fold-title">${esc(r.name)}</span><span class="tiny muted">${plural(r.exercises.length, 'exercício', 'exercícios')} · toque para editar</span></span>
+          <span class="chev fold-chev">${ICON.chevron}</span>
+        </summary>
+        <div class="row">
           <input class="plain grow" value="${esc(r.name)}" data-routine="${r.id}" data-k="name" aria-label="Nome da rotina">
           <button class="icon-btn" data-action="delete-routine" data-id="${r.id}" aria-label="Excluir rotina">${ICON.trash}</button>
         </div>
         <textarea rows="${Math.max(3, r.exercises.length)}" data-routine="${r.id}" data-k="exercises" placeholder="Supino reto | 3×10-12" aria-label="Exercícios">${esc(r.exercises.join('\n'))}</textarea>
         <textarea rows="2" data-routine="${r.id}" data-k="note" placeholder="Observação (opcional)" aria-label="Observação da rotina">${esc(r.note || '')}</textarea>
-      </div>`).join('')}
+      </details>`).join('')}
     <p class="tiny muted" style="margin:-2px 4px 12px">Um exercício por linha. Para definir a meta, use: Exercício | séries×repetições</p>
     <button class="btn tinted" data-action="add-routine">${ICON.plus} Nova rotina</button>
     <div class="spacer"></div>
@@ -837,6 +891,11 @@ function viewRotinas() {
 
 /* ---------- Ações ---------- */
 
+function scrollToEx(ei) {
+  const el = document.querySelector(`[data-ex="${ei}"]`);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function startWorkout(routine) {
   Feedback.keepAwake(true);
   state.current = {
@@ -879,7 +938,9 @@ const actions = {
     const input = document.getElementById('new-ex');
     const name = input.value.trim();
     if (!name) return input.focus();
-    state.current.exercises.push(newExercise(name));
+    fixOpenStates(state.current);
+    state.current.exercises.forEach((e) => { e.open = false; });
+    state.current.exercises.push({ ...newExercise(name), open: true });
     save(); render();
   },
   'remove-ex': async (el) => {
@@ -898,10 +959,29 @@ const actions = {
     if (sets.length > 1) sets.pop();
     save(); render();
   },
-  'toggle-set': (el) => {
-    const set = state.current.exercises[+el.dataset.ei].sets[+el.dataset.si];
-    set.done = !set.done;
+  'toggle-ex': (el) => {
+    const cur = state.current; fixOpenStates(cur);
+    const ex = cur.exercises[+el.dataset.ei];
+    ex.open = !ex.open;
     save(); render();
+    if (ex.open) scrollToEx(+el.dataset.ei);
+  },
+  'toggle-warm': () => { state.current.warmOpen = !state.current.warmOpen; save(); render(); },
+  'toggle-set': (el) => {
+    const cur = state.current; fixOpenStates(cur);
+    const ei = +el.dataset.ei;
+    const set = cur.exercises[ei].sets[+el.dataset.si];
+    set.done = !set.done;
+    // exercício terminou: minimiza e abre o próximo que falta
+    let nextOpen = -1;
+    if (set.done && cur.exercises[ei].sets.every((x) => x.done)) {
+      cur.exercises[ei].open = false;
+      const order = [...cur.exercises.keys()].slice(ei + 1).concat([...cur.exercises.keys()].slice(0, ei));
+      nextOpen = order.find((i) => cur.exercises[i].sets.some((x) => !x.done)) ?? -1;
+      if (nextOpen >= 0) cur.exercises[nextOpen].open = true;
+    }
+    save(); render();
+    if (nextOpen >= 0) setTimeout(() => scrollToEx(nextOpen), 350);
     if (set.done) {
       startTimer();
       const ex = state.current.exercises[+el.dataset.ei];

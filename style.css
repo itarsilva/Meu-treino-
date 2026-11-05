@@ -465,3 +465,31 @@ details > summary::-webkit-details-marker { display: none; }
 }
 .goal-row input.toggle:checked { background: var(--ring-green); }
 .goal-row input.toggle:checked::after { transform: translateX(20px); }
+
+/* ---------- Cartões minimizados ---------- */
+.fold-head {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  border: 0; background: transparent; color: inherit; font: inherit; text-align: left;
+  padding: 0; cursor: pointer; list-style: none;
+}
+.fold-head::-webkit-details-marker { display: none; }
+.fold-head.inline { width: auto; flex: 1; min-width: 0; gap: 8px; }
+.fold-head.inline h3 { flex: 0 1 auto; }
+.fold-title { display: block; font-weight: 700; font-size: 17px; letter-spacing: -0.01em; }
+.fold-chev { transition: transform .2s; color: var(--muted); display: grid; place-items: center; }
+.fold-chev svg { width: 16px; height: 16px; }
+.fold-chev.open, details[open] > summary .fold-chev { transform: rotate(90deg); }
+.exercise.mini { padding: 14px 16px; }
+.exercise.mini.complete .fold-title { color: var(--muted); }
+.mini-ring { width: 32px; height: 32px; flex: none; }
+.mini-ring circle { fill: none; stroke-width: 3.5; stroke-linecap: round; }
+.mini-track { stroke: var(--surface-2); }
+.mini-bar { stroke: var(--ring-green); }
+.mini-num { fill: var(--muted); font-size: 12px; font-weight: 700; font-family: inherit; }
+.mini-check { fill: none; stroke: var(--ring-green); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.note .warm-list { margin-top: 10px; }
+details.routine-edit:not([open]) { gap: 0; }
+details.routine-edit[open] > summary { margin-bottom: 6px; }
+.lib-group { margin-bottom: 10px; }
+.lib-head { padding: 14px 16px; margin-bottom: 0; }
+.lib-group[open] > .lib-head { margin-bottom: 8px; }
