@@ -1138,6 +1138,8 @@ const actions = {
   },
   'timer-add': () => { timerEnd += 15000; timerTotal += 15000; tickTimer(); },
   'timer-stop': () => stopTimer(),
+  'timer-min': () => showRest(false),
+  'timer-expand': () => { if (timerId) showRest(true); },
 };
 
 async function importText(txt) {
@@ -1299,11 +1301,35 @@ const $timer = document.getElementById('timer');
 const $timerValue = document.getElementById('timer-value');
 const $timerBar = document.getElementById('timer-bar');
 const RING_LEN = 2 * Math.PI * 15;
+const $big = document.getElementById('rest-big');
+const $bigValue = document.getElementById('rb-value');
+const $bigBar = document.getElementById('rb-bar');
+const $bigNext = document.getElementById('rb-next');
+const BIG_LEN = 2 * Math.PI * 100;
+let restMini = false;
+
+/** Texto da próxima série a fazer, para mostrar durante o descanso. */
+function nextSetLabel() {
+  const cur = state.current; if (!cur) return '';
+  for (const ex of cur.exercises) {
+    const i = ex.sets.findIndex((x) => !x.done);
+    if (i >= 0) return `Próxima: ${ex.name} · série ${i + 1} de ${ex.sets.length}`;
+  }
+  return 'Todas as séries feitas. Finalize o treino!';
+}
+
+function showRest(big) {
+  restMini = !big;
+  $big.hidden = !big;
+  $timer.classList.toggle('hidden', big);
+  document.body.classList.toggle('resting', big);
+}
 
 function startTimer() {
   timerTotal = REST_SECONDS * 1000;
   timerEnd = Date.now() + timerTotal;
-  $timer.classList.remove('hidden');
+  $bigNext.textContent = nextSetLabel();
+  showRest(true);
   clearInterval(timerId);
   timerId = setInterval(tickTimer, 250);
   tickTimer();
@@ -1314,6 +1340,10 @@ function tickTimer() {
   const left = Math.ceil(leftMs / 1000);
   $timerValue.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
   $timerBar.style.strokeDashoffset = (RING_LEN * (1 - leftMs / timerTotal)).toFixed(2);
+  // tela cheia: número gigante em segundos (ou m:ss acima de 1 minuto)
+  $bigValue.textContent = left >= 60 ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : String(left);
+  $bigBar.style.strokeDashoffset = (BIG_LEN * (1 - leftMs / timerTotal)).toFixed(2);
+  $big.classList.toggle('ending', left <= 5 && left > 0);
   if (left === 0) {
     Feedback.vibrate([250, 120, 250]);
     Feedback.beep(3);
@@ -1326,6 +1356,9 @@ function stopTimer() {
   clearInterval(timerId);
   timerId = null;
   $timer.classList.add('hidden');
+  $big.hidden = true;
+  $big.classList.remove('ending');
+  document.body.classList.remove('resting');
 }
 
 // Cronômetro do treino em andamento (atualiza só o número, sem redesenhar a tela).
@@ -1340,7 +1373,8 @@ document.addEventListener('click', (e) => {
   const tabBtn = e.target.closest('[data-tab]');
   if (tabBtn) { tab = tabBtn.dataset.tab; render(); window.scrollTo(0, 0); return; }
   const el = e.target.closest('button[data-action]');
-  if (el && actions[el.dataset.action]) actions[el.dataset.action](el);
+  if (el && actions[el.dataset.action]) { actions[el.dataset.action](el); return; }
+  if (e.target.closest('#timer')) actions['timer-expand']();
 });
 
 document.addEventListener('keydown', (e) => {

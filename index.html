@@ -18,7 +18,7 @@
 <body>
   <main id="view"></main>
 
-  <div id="timer" class="rest hidden" role="status" aria-live="polite">
+  <div id="timer" class="rest hidden" role="status" aria-live="polite" data-action-area="timer-expand">
     <svg class="rest-ring" viewBox="0 0 36 36" aria-hidden="true">
       <circle cx="18" cy="18" r="15" class="rest-track"/>
       <circle cx="18" cy="18" r="15" class="rest-bar" id="timer-bar"/>
@@ -29,6 +29,24 @@
     </div>
     <button class="pill-btn" data-action="timer-add">+15s</button>
     <button class="pill-btn" data-action="timer-stop">Pular</button>
+  </div>
+
+  <!-- Descanso em tela cheia -->
+  <div id="rest-big" class="rest-big" hidden role="dialog" aria-modal="true" aria-label="Descanso">
+    <p class="rest-big-label">Descanso</p>
+    <div class="rest-big-dial">
+      <svg viewBox="0 0 220 220" aria-hidden="true">
+        <circle cx="110" cy="110" r="100" class="rb-track"/>
+        <circle cx="110" cy="110" r="100" class="rb-bar" id="rb-bar"/>
+      </svg>
+      <div class="rest-big-num" id="rb-value" aria-live="polite">40</div>
+    </div>
+    <p class="rest-big-next" id="rb-next"></p>
+    <div class="rest-big-actions">
+      <button class="rb-btn" data-action="timer-add">+15s</button>
+      <button class="rb-btn go" data-action="timer-stop">Pular</button>
+    </div>
+    <button class="rb-min" data-action="timer-min">Minimizar</button>
   </div>
 
   <nav class="tabbar" id="tabbar"></nav>

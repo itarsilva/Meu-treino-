@@ -1,5 +1,5 @@
 // Service worker: deixa o app funcionando offline.
-const CACHE = 'meu-treino-v13';
+const CACHE = 'meu-treino-v14';
 const ASSETS = ['./', 'index.html', 'style.css', 'exercicios.js', 'app.js', 'manifest.json', 'icon.svg'];
 
 self.addEventListener('install', (e) => {
