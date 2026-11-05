@@ -452,3 +452,16 @@ details > summary::-webkit-details-marker { display: none; }
   background: color-mix(in srgb, var(--cyan) 18%, transparent); color: var(--cyan);
 }
 .warm-name { display: block; font-weight: 600; font-size: 15px; }
+
+/* ---------- Interruptor (estilo iOS) ---------- */
+.goal-row input.toggle {
+  appearance: none; -webkit-appearance: none; flex: none;
+  width: 51px; min-height: 31px; height: 31px; padding: 0; border-radius: 999px;
+  background: var(--surface-2); position: relative; cursor: pointer; transition: background .2s;
+}
+.goal-row input.toggle::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%;
+  background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .3); transition: transform .2s;
+}
+.goal-row input.toggle:checked { background: var(--ring-green); }
+.goal-row input.toggle:checked::after { transform: translateX(20px); }

@@ -12,6 +12,7 @@ Visual limpo inspirado nos apps de fitness do iOS: fundo escuro (ou claro, confo
   - Os campos já vêm preenchidos com o que você fez da última vez naquele exercício.
   - Cronômetro grande do treino em andamento.
   - Ao marcar uma série, abre um **timer de descanso** de 40 s (com +15 s).
+  - Vibra ao concluir série, exercício e treino; no fim do descanso vibra (Android), toca um bipe e mostra um aviso. A tela fica acesa durante o treino.
 - **Histórico**: todos os treinos salvos, com duração, séries e volume total (kg × reps).
 - **Progresso**: gráfico da maior carga por treino em cada exercício, recorde pessoal e 1RM estimado.
 - **Plano de 5 dias** baseado na avaliação física: ênfase em costas e postura, pernas sem carga na coluna, trabalho unilateral para a coxa esquerda e core. Cada exercício tem meta de séries×repetições (formato `Exercício | 3×10-12`).

@@ -187,7 +187,7 @@ function load() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const d = JSON.parse(raw);
-      const st = { workouts: d.workouts || [], routines: d.routines ?? DEFAULT_ROUTINES, current: d.current || null, goals: { ...DEFAULT_GOALS, ...d.goals }, plan: d.plan || 1, body: d.body || [] };
+      const st = { workouts: d.workouts || [], routines: d.routines ?? DEFAULT_ROUTINES, current: d.current || null, goals: { ...DEFAULT_GOALS, ...d.goals }, plan: d.plan || 1, body: d.body || [], prefs: { haptics: true, sound: true, ...d.prefs } };
       // Quem ainda usa as rotinas de exemplo antigas recebe o plano da avaliação.
       if (st.plan < PLAN_VERSION) {
         const untouched = st.routines.every((r) => OLD_DEFAULT_NAMES.includes(r.name));
@@ -197,7 +197,7 @@ function load() {
       return st;
     }
   } catch (e) { /* sem armazenamento disponível */ }
-  return { workouts: [], routines: DEFAULT_ROUTINES, current: null, goals: { ...DEFAULT_GOALS }, plan: PLAN_VERSION, body: [] };
+  return { workouts: [], routines: DEFAULT_ROUTINES, current: null, goals: { ...DEFAULT_GOALS }, plan: PLAN_VERSION, body: [], prefs: { haptics: true, sound: true } };
 }
 
 function save() {
@@ -798,6 +798,13 @@ function viewRotinas() {
 
     ${exerciseLibrary()}
 
+    <p class="section-label">Avisos</p>
+    <div class="list">
+      <div class="goal-row"><label for="p-hap">Vibrar ao concluir série, exercício e treino</label><input id="p-hap" type="checkbox" class="toggle" data-pref="haptics" ${state.prefs?.haptics !== false ? 'checked' : ''}></div>
+      <div class="goal-row"><label for="p-snd">Bipe no fim do descanso</label><input id="p-snd" type="checkbox" class="toggle" data-pref="sound" ${state.prefs?.sound !== false ? 'checked' : ''}></div>
+    </div>
+    <p class="tiny muted" style="margin:0 4px 12px">No iPhone (iOS 18 ou mais novo) a vibração é um toque curto. O bipe não toca com o celular no silencioso.</p>
+
     <p class="section-label">Metas semanais</p>
     <div class="list">
       <div class="goal-row"><label for="g-w" class="c-pink">Treinos</label><input id="g-w" inputmode="numeric" value="${g.workouts}" data-goal="workouts"></div>
@@ -831,6 +838,7 @@ function viewRotinas() {
 /* ---------- Ações ---------- */
 
 function startWorkout(routine) {
+  Feedback.keepAwake(true);
   state.current = {
     name: routine ? routine.name : 'Treino livre',
     routineId: routine ? routine.id : null,
@@ -859,6 +867,8 @@ function finishWorkout() {
   window.scrollTo(0, 0);
   const since = startOfWeek();
   const weekCount = state.workouts.filter((w) => new Date(w.date) >= since).length;
+  Feedback.vibrate([120, 70, 120, 70, 260]);
+  Feedback.keepAwake(false);
   toast(weekCount === state.goals.workouts ? pick(GOAL_PHRASES) : pick(FINISH_PHRASES), 4000);
 }
 
@@ -894,13 +904,16 @@ const actions = {
     save(); render();
     if (set.done) {
       startTimer();
-      if (navigator.vibrate) navigator.vibrate(15);
       const ex = state.current.exercises[+el.dataset.ei];
+      const exDone = ex.sets.every((x) => x.done);
+      Feedback.vibrate(exDone ? [80, 60, 80] : 20);
       const prev = bestKg(ex.name);
       const kg = num(set.kg);
       const firstToday = ex.sets.filter((x) => x.done && num(x.kg) >= kg).length === 1;
       if (prev > 0 && kg > prev && num(set.reps) > 0 && firstToday) {
         toast(`Novo recorde no ${ex.name}: ${fmtNum(kg)} kg! Você está mais forte.`, 4000);
+      } else if (exDone) {
+        toast(`${ex.name} concluído! ✓`, 2600);
       }
     }
   },
@@ -1072,6 +1085,71 @@ function toast(msg, ms = 2800) {
   toastId = setTimeout(() => { el.classList.remove('show'); setTimeout(() => { el.hidden = true; }, 250); }, ms);
 }
 
+/* ---------- Avisos: vibração, bipe e tela acesa ---------- */
+
+const Feedback = (() => {
+  let iosLabel = null, actx = null, wake = null;
+  const prefs = () => (state.prefs || { haptics: true, sound: true });
+
+  // iPhone (iOS 18+): alternar um "switch" escondido dá um toque de vibração.
+  // Só funciona dentro de um toque na tela.
+  function iosTick() {
+    if (!iosLabel) {
+      iosLabel = document.createElement('label');
+      iosLabel.setAttribute('aria-hidden', 'true');
+      iosLabel.style.cssText = 'position:fixed;left:-200px;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+      iosLabel.innerHTML = '<input type="checkbox" switch tabindex="-1">';
+      document.body.appendChild(iosLabel);
+    }
+    iosLabel.click();
+  }
+
+  /** pattern em ms, como navigator.vibrate. Android vibra o padrão; iPhone dá um toque. */
+  function vibrate(pattern) {
+    if (!prefs().haptics) return;
+    try { if (navigator.vibrate && navigator.vibrate(pattern)) return; } catch (e) { /* bloqueado */ }
+    try { iosTick(); } catch (e) { /* sem suporte */ }
+  }
+
+  // o áudio precisa ser liberado por um toque; depois o bipe toca sozinho no fim do descanso
+  function unlock() {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!actx && AC) actx = new AC();
+      if (actx && actx.state === 'suspended') actx.resume();
+    } catch (e) { /* sem áudio */ }
+  }
+  function beep(times = 3) {
+    if (!prefs().sound || !actx) return;
+    try {
+      const t0 = actx.currentTime + 0.02;
+      for (let i = 0; i < times; i++) {
+        const t = t0 + i * 0.22, osc = actx.createOscillator(), g = actx.createGain();
+        osc.type = 'sine'; osc.frequency.value = i === times - 1 ? 1320 : 880;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.35, t + 0.015);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+        osc.connect(g); g.connect(actx.destination);
+        osc.start(t); osc.stop(t + 0.18);
+      }
+    } catch (e) { /* ignora */ }
+  }
+
+  // mantém a tela acesa durante o treino, para o timer não parar
+  async function keepAwake(on) {
+    try {
+      if (on && !wake && navigator.wakeLock && document.visibilityState === 'visible') {
+        wake = await navigator.wakeLock.request('screen');
+        wake.addEventListener('release', () => { wake = null; });
+      } else if (!on && wake) { await wake.release(); wake = null; }
+    } catch (e) { wake = null; }
+  }
+  document.addEventListener('visibilitychange', () => { if (state.current) keepAwake(true); });
+  document.addEventListener('pointerdown', unlock, { passive: true });
+
+  return { vibrate, beep, keepAwake };
+})();
+
 /* ---------- Timer de descanso ---------- */
 
 let timerEnd = 0, timerTotal = 0, timerId = null;
@@ -1095,8 +1173,10 @@ function tickTimer() {
   $timerValue.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
   $timerBar.style.strokeDashoffset = (RING_LEN * (1 - leftMs / timerTotal)).toFixed(2);
   if (left === 0) {
-    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    Feedback.vibrate([250, 120, 250]);
+    Feedback.beep(3);
     stopTimer();
+    toast('Descanso acabou. Bora para a próxima série! 💪', 3000);
   }
 }
 
@@ -1149,6 +1229,12 @@ document.addEventListener('input', (e) => {
 
 document.addEventListener('change', (e) => {
   const t = e.target;
+  if (t.dataset.pref) {
+    state.prefs = { haptics: true, sound: true, ...state.prefs, [t.dataset.pref]: t.checked };
+    save();
+    if (t.checked) (t.dataset.pref === 'sound' ? Feedback.beep(2) : Feedback.vibrate(30));
+    return;
+  }
   if (t.dataset.action === 'import' && t.files[0]) {
     t.files[0].text().then(importText);
     t.value = '';
