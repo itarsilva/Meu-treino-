@@ -476,6 +476,7 @@ function viewLive() {
         <div><div class="value c-pink">${cur.exercises.length}</div><div class="label">Exercícios</div></div>
       </div>
     </div>
+    ${staleCard(cur)}
     ${noteCard(cur.note || '')}
 
     ${cur.exercises.map((ex, ei) => {
@@ -531,7 +532,42 @@ function viewLive() {
     <div class="spacer"></div>
     <button class="btn primary" data-action="finish">Finalizar treino</button>
     <button class="btn text" data-action="cancel">Descartar</button>
+    ${switchCard(cur)}
   `;
+}
+
+function staleCard(cur) {
+  const h = (Date.now() - new Date(cur.startedAt)) / 36e5;
+  if (h < 4) return '';
+  const when = h >= 20 ? 'desde ontem' : `há ${Math.floor(h)} horas`;
+  return `
+    <div class="card stale">
+      <p class="small"><strong>Este treino está aberto ${when}.</strong> Esqueceu de finalizar? Para ver os outros dias, finalize ou descarte este.</p>
+      <div class="row">
+        <button class="pill-btn go grow" data-action="finish">Finalizar e salvar</button>
+        <button class="pill-btn grow" data-action="cancel">Descartar</button>
+      </div>
+    </div>`;
+}
+
+/** Lista dos outros dias durante um treino, para trocar sem precisar descartar antes. */
+function switchCard(cur) {
+  const others = state.routines.filter((r) => r.id !== cur.routineId);
+  if (!others.length) return '';
+  const open = !!cur.switchOpen;
+  return `
+    <div class="card switch">
+      <button class="fold-head" data-action="toggle-switch" aria-expanded="${open}">
+        <span class="grow"><span class="fold-title">Trocar de treino</span><span class="tiny muted">${plural(others.length, 'outro treino', 'outros treinos')}</span></span>
+        <span class="chev fold-chev ${open ? 'open' : ''}">${ICON.chevron}</span>
+      </button>
+      ${open ? `<div class="warm-list">${others.map((r) => `
+        <button class="warm-row switch-row" data-action="switch" data-id="${r.id}">
+          <span class="icon-badge" style="--c:var(--ring-green);width:30px;height:30px">${ICON.dumbbell}</span>
+          <span class="grow"><span class="warm-name">${esc(r.name)}</span><span class="tiny muted">${plural(r.exercises.length, 'exercício', 'exercícios')}</span></span>
+          <span class="chev">${ICON.chevron}</span>
+        </button>`).join('')}</div>` : ''}
+    </div>`;
 }
 
 function viewHistorico() {
@@ -917,7 +953,10 @@ function finishWorkout() {
     return;
   }
   const now = new Date().toISOString();
-  state.workouts.push({ id: uid(), name: cur.name, routineId: cur.routineId || null, date: now, duration: minutesBetween(cur.startedAt, now), exercises });
+  let duration = minutesBetween(cur.startedAt, now);
+  // treino esquecido aberto: estima pelo número de séries (~2,5 min cada)
+  if (duration > 240) duration = Math.max(20, Math.round(exercises.reduce((a, e) => a + e.sets.filter((x) => x.done).length, 0) * 2.5));
+  state.workouts.push({ id: uid(), name: cur.name, routineId: cur.routineId || null, date: now, duration, exercises });
   state.current = null;
   stopTimer();
   save();
@@ -965,6 +1004,29 @@ const actions = {
     ex.open = !ex.open;
     save(); render();
     if (ex.open) scrollToEx(+el.dataset.ei);
+  },
+  'toggle-switch': () => { state.current.switchOpen = !state.current.switchOpen; save(); render(); },
+  switch: (el) => {
+    const r = state.routines.find((x) => x.id === el.dataset.id);
+    if (!r) return;
+    const hasDone = doneSets(state.current) > 0;
+    openSheet(`
+      <p class="sheet-msg">Começar ${esc(r.name)}? O treino atual (${esc(state.current.name)}) vai ser ${hasDone ? 'salvo ou descartado' : 'descartado, pois nenhuma série foi feita'}.</p>
+      ${hasDone ? '<button class="sheet-btn" data-sheet="save">Salvar o atual e começar</button>' : ''}
+      <button class="sheet-btn destructive" data-sheet="discard">Descartar o atual e começar</button>`, (v) => {
+      if (v !== 'save' && v !== 'discard') return;
+      if (v === 'save') {
+        const cur = state.current;
+        const exercises = cur.exercises.filter((e) => e.sets.some((x) => x.done));
+        const now = new Date().toISOString();
+        let duration = minutesBetween(cur.startedAt, now);
+        if (duration > 240) duration = Math.max(20, Math.round(doneSets(cur) * 2.5));
+        state.workouts.push({ id: uid(), name: cur.name, routineId: cur.routineId || null, date: now, duration, exercises });
+      }
+      state.current = null; stopTimer();
+      startWorkout(r);
+      toast(v === 'save' ? 'Treino anterior salvo. Bom treino!' : `Começando ${r.name}`);
+    });
   },
   'toggle-warm': () => { state.current.warmOpen = !state.current.warmOpen; save(); render(); },
   'toggle-set': (el) => {

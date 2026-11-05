@@ -493,3 +493,10 @@ details.routine-edit[open] > summary { margin-bottom: 6px; }
 .lib-group { margin-bottom: 10px; }
 .lib-head { padding: 14px 16px; margin-bottom: 0; }
 .lib-group[open] > .lib-head { margin-bottom: 8px; }
+
+/* ---------- Trocar de treino / treino esquecido ---------- */
+.stale { display: grid; gap: 12px; border: 1px solid color-mix(in srgb, var(--yellow) 45%, transparent); background: color-mix(in srgb, var(--yellow) 10%, var(--surface)); }
+.stale .pill-btn { min-height: 40px; }
+.switch { margin-top: 16px; }
+.switch-row { width: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.lib-head { background: var(--surface); border-radius: var(--radius); }
