@@ -441,3 +441,14 @@ details > summary::-webkit-details-marker { display: none; }
   border-radius: 999px; padding: 2px 8px;
 }
 .demo-canvas { background: color-mix(in srgb, var(--ring-green) 10%, var(--surface)); }
+
+/* ---------- Aquecimento ---------- */
+.warm-list { display: grid; margin: 2px 0 4px; }
+.warm-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; position: relative; }
+.warm-row + .warm-row::before { content: ""; position: absolute; top: 0; left: 34px; right: 0; border-top: .5px solid var(--separator); }
+.warm-n {
+  width: 22px; height: 22px; border-radius: 50%; flex: none;
+  display: grid; place-items: center; font-size: 12px; font-weight: 700;
+  background: color-mix(in srgb, var(--cyan) 18%, transparent); color: var(--cyan);
+}
+.warm-name { display: block; font-weight: 600; font-size: 15px; }

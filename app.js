@@ -14,6 +14,14 @@ const PLAN_VERSION = 2;
    (dores em costas/quadril, hipercifose, ombros rodados para dentro,
    flexibilidade abaixo da média, coxa esquerda menor).
    Formato de cada linha: "Exercício | séries×repetições". */
+/* Exercícios do aquecimento, na ordem, com a dose de cada um. */
+const WARMUP_ITEMS = [
+  { name: 'Gato-camelo', dose: '10 vezes' },
+  { name: 'Rotação torácica', dose: '8 por lado' },
+  { name: 'Alongamento de posteriores', dose: '30 s cada perna' },
+  { name: 'Alongamento de flexores do quadril', dose: '30 s cada lado' },
+  { name: 'Rotação externa com elástico', dose: '15 vezes' },
+];
 const WARMUP = 'Aquecimento (8 min): gato-camelo e rotação torácica, alongamento de posteriores e flexores do quadril, rotação externa de ombro com elástico.';
 const PLAN_ROUTINES = () => [
   { id: uid(), name: 'Dia 1 — Costas e postura', note: WARMUP, exercises: [
@@ -379,6 +387,27 @@ function viewResumo() {
   `;
 }
 
+/** "Antes de começar": aquecimento com botão Ver em cada exercício + cuidados da rotina. */
+function noteCard(note) {
+  const hasWarm = note.startsWith('Aquecimento');
+  const extra = hasWarm ? note.replace(WARMUP, '').trim() : note;
+  return `
+    <div class="card note">
+      <p class="eyebrow c-cyan">Antes de começar</p>
+      ${hasWarm ? `
+        <p class="small" style="font-weight:600">Aquecimento · 8 min</p>
+        <div class="warm-list">
+          ${WARMUP_ITEMS.map((w, i) => `
+            <div class="warm-row">
+              <span class="warm-n">${i + 1}</span>
+              <span class="grow"><span class="warm-name">${esc(w.name)}</span><span class="tiny muted">${esc(w.dose)}</span></span>
+              ${hasDemo(w.name) ? `<button class="demo-btn" data-action="demo" data-name="${esc(w.name)}" data-dose="${esc(w.dose)}" aria-label="Ver como fazer ${esc(w.name)}">${ICON.play}Ver</button>` : ''}
+            </div>`).join('')}
+        </div>` : ''}
+      ${extra ? `<p class="small muted">${esc(extra)}</p>` : ''}
+    </div>`;
+}
+
 /** Bonequinho de cada rotina: o primeiro exercício com animação, sem repetir entre rotinas. */
 function routineIcons() {
   const used = new Set();
@@ -418,7 +447,7 @@ function viewLive() {
         <div><div class="value c-pink">${cur.exercises.length}</div><div class="label">Exercícios</div></div>
       </div>
     </div>
-    ${cur.note ? `<div class="card note"><p class="eyebrow c-cyan">Antes de começar</p><p class="small">${esc(cur.note)}</p></div>` : '<div class="spacer"></div>'}
+    ${cur.note ? noteCard(cur.note) : '<div class="spacer"></div>'}
 
     ${cur.exercises.map((ex, ei) => {
       const prev = lastPerformance(ex.name);
@@ -725,10 +754,12 @@ function viewCorpo() {
 
 function exerciseLibrary() {
   const seen = new Set();
-  const groups = state.routines.map((r) => ({
+  const warm = { name: 'Aquecimento (antes de todo treino)', items: WARMUP_ITEMS.filter((w) => hasDemo(w.name)).map((w) => ({ name: w.name, dose: w.dose })) };
+  warm.items.forEach((w) => seen.add(w.name));
+  const groups = [warm, ...state.routines.map((r) => ({
     name: r.name,
     items: r.exercises.map(parseLine).filter((e) => hasDemo(e.name) && !seen.has(e.name) && seen.add(e.name)),
-  })).filter((g) => g.items.length);
+  }))].filter((g) => g.items.length);
   if (!groups.length) return '';
   return `
     <p class="section-label">Como fazer cada exercício</p>
@@ -736,10 +767,10 @@ function exerciseLibrary() {
       <p class="tiny muted" style="margin:10px 4px 6px">${esc(g.name)}</p>
       <div class="list">
         ${g.items.map((e) => `
-          <button class="list-row" data-action="demo" data-name="${esc(e.name)}" style="min-height:52px">
+          <button class="list-row" data-action="demo" data-name="${esc(e.name)}" ${e.dose ? `data-dose="${esc(e.dose)}"` : ''} style="min-height:52px">
             <span class="icon-badge" style="--c:var(--ring-green);width:30px;height:30px">${ICON.play}</span>
             <span class="body"><span class="title" style="display:block">${esc(e.name)}</span></span>
-            ${e.target ? `<span class="tiny muted">${e.target.sets}×${esc(e.target.reps)}</span>` : ''}
+            ${e.target ? `<span class="tiny muted">${e.target.sets}×${esc(e.target.reps)}</span>` : e.dose ? `<span class="tiny muted">${esc(e.dose)}</span>` : ''}
             <span class="chev">${ICON.chevron}</span>
           </button>`).join('')}
       </div>`).join('')}`;
@@ -882,7 +913,7 @@ const actions = {
     state.workouts = state.workouts.filter((w) => w.id !== el.dataset.id);
     save(); render();
   },
-  demo: (el) => showDemo(el.dataset.name),
+  demo: (el) => showDemo(el.dataset.name, el.dataset.dose),
   pick: (el) => { progressExercise = el.dataset.name; render(); },
   mode: (el) => { progressMode = el.dataset.mode; render(); },
   'go-body': () => { tab = 'progresso'; progressMode = 'corpo'; render(); window.scrollTo(0, 0); },
@@ -996,7 +1027,7 @@ function closeSheet(value) {
 
 const hasDemo = (name) => !!(window.ExAnim && ExAnim.animFor(name));
 
-function showDemo(name) {
+function showDemo(name, dose) {
   const key = ExAnim.animFor(name);
   if (!key) return;
   const pat = ExAnim.PATTERNS[key];
@@ -1005,7 +1036,8 @@ function showDemo(name) {
     <div class="demo">
       <canvas class="demo-canvas" id="demo-canvas" role="img" aria-label="Animação do exercício ${esc(name)}"></canvas>
       <h3 class="demo-title">${esc(name)}</h3>
-      ${plan ? `<p class="target" style="text-align:center">Meta · ${plan.target.sets} × ${esc(plan.target.reps)}</p>` : ''}
+      ${dose ? `<p class="target" style="text-align:center">${esc(dose)}</p>`
+        : plan ? `<p class="target" style="text-align:center">Meta · ${plan.target.sets} × ${esc(plan.target.reps)}</p>` : ''}
       <ul class="demo-tips">${pat.tips.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
       <div class="demo-legend tiny muted">
         <span><span class="hl-swatch arrow"></span>caminho e direção do movimento</span>

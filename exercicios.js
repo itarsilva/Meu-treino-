@@ -331,7 +331,55 @@
     pallof: ['hN', 'Empurre à frente', 'Volte'],
   };
 
+  // ---------- Aquecimento ----------
+  Object.assign(PATTERNS, {
+    catCamel: {
+      title: 'Gato-camelo', hl: ['torso'], faceDown: true,
+      props: [],
+      poses: [
+        P({ hip: [124, 118], torso: -70, arch: 9, aN: [0, 0], aF: [0, 0], lN: [0, 90], lF: [0, 90], ftN: 90, ftF: 90 }),
+        P({ hip: [124, 118], torso: -70, arch: -7, aN: [0, 0], aF: [0, 0], lN: [0, 90], lF: [0, 90], ftN: 90, ftF: 90 }),
+      ],
+      tips: ['Apoio de mãos e joelhos: mãos embaixo dos ombros, joelhos embaixo do quadril.', 'Arredonde as costas olhando para o umbigo (gato).', 'Depois afunde a coluna e olhe para frente (camelo). Movimento lento, sem dor.'],
+    },
+    thoracicRot: {
+      title: 'Rotação torácica', hl: ['arm', 'torso'], faceDown: true,
+      props: [],
+      poses: [
+        P({ hip: [124, 118], torso: -70, aN: [4, 4, 0.5, 0.5], aF: [0, 0], lN: [0, 90], lF: [0, 90], ftN: 90, ftF: 90 }),
+        P({ hip: [124, 118], torso: -70, aN: [-178, -178, 1, 1], aF: [0, 0], lN: [0, 90], lF: [0, 90], ftN: 90, ftF: 90 }),
+      ],
+      tips: ['De quatro apoios, passe uma mão por baixo do corpo.', 'Depois gire o tronco e abra o braço em direção ao teto.', 'Acompanhe a mão com o olhar. Faça os dois lados.'],
+    },
+    hamStretch: {
+      title: 'Alongamento de posteriores', hl: ['leg'],
+      props: [],
+      poses: [
+        P({ hip: [96, 86], torso: 4, fN: [132, 150], fF: [92, 150], kN: -1, kF: -1, ftN: 160, aN: [8, 8], aF: [4, 4] }),
+        P({ hip: [86, 92], torso: 48, fN: [132, 150], fF: [92, 150], kN: -1, kF: -1, ftN: 160, aN: [6, 6], aF: [2, 2] }),
+      ],
+      tips: ['Calcanhar da frente no chão, ponta do pé para cima e joelho esticado.', 'Incline o tronco com a coluna reta, empurrando o quadril para trás.', 'Pare quando sentir puxar atrás da coxa e segure. Faça as duas pernas.'],
+    },
+    hipFlexStretch: {
+      title: 'Alongamento de flexores do quadril', hl: ['leg', 'torso'],
+      props: [],
+      poses: [
+        P({ hip: [98, 118], torso: 0, fN: [56, 150], fF: [132, 150], kN: 1, kF: -1, ftN: 270, ftF: 90, aN: [-25, 60], aF: [-28, 58] }),
+        P({ hip: [110, 124], torso: -6, fN: [56, 150], fF: [132, 150], kN: 1, kF: -1, ftN: 270, ftF: 90, aN: [-31, 54], aF: [-34, 52] }),
+      ],
+      tips: ['Um joelho no chão (use uma toalha) e o outro pé à frente.', 'Contraia o glúteo da perna de trás e leve o quadril um pouco à frente.', 'Tronco alto, sem arquear a lombar. Segure e troque o lado.'],
+    },
+  });
+  Object.assign(MOVE, {
+    catCamel: ['hip', 'Arredonde as costas', 'Afunde e olhe à frente', false, false, true],
+    thoracicRot: ['hN', 'Gire e abra o braço', 'Volte por baixo', false, false, true],
+    hamStretch: ['sh', 'Incline e segure', 'Volte devagar', true],
+    hipFlexStretch: ['hip', 'Quadril à frente e segure', 'Volte', true],
+  });
+
   const RULES = [
+    ['gato-camelo', 'catCamel'], ['gato camelo', 'catCamel'], ['rotacao toracica', 'thoracicRot'],
+    ['alongamento de posteriores', 'hamStretch'], ['flexores do quadril', 'hipFlexStretch'],
     ['puxada', 'pulldown'], ['remada baixa', 'rowSeated'], ['remada', 'rowBent'], ['face pull', 'facePull'],
     ['crucifixo inverso', 'reverseFly'], ['crucifixo', 'fly'], ['rosca scott', 'scott'], ['rosca', 'curl'],
     ['frances', 'overhead'], ['triceps', 'pushdown'], ['supino inclinado', 'incline'], ['supino', 'flat'],
@@ -476,6 +524,7 @@
     };
 
     // movimento curto (panturrilha): seta fixa ao lado do ponto que se move
+    if (moving && !iso && pathLen < 1.5) return { dir: null, front: false }; // ponto parado: só a instrução
     if (moving && !iso && pathLen < 20) {
       const d = arrowDir, dl = Math.hypot(d[0], d[1]) || 1;
       effPoints(key, poseU(pat, u)).forEach((cur, k) => {
@@ -588,10 +637,17 @@
       part([j.hip, j.kF, j.ankF, j.toeF], legR, false);
       part([j.sh, j.eF, j.hF], armR, false);
       if (held) held(j, true);
-      // tronco e cabeça solta, um pouco à frente
-      part([j.hip, j.sh], [R.torsoHip, R.torsoSh]);
+      // tronco (reto ou curvado) e cabeça solta, um pouco à frente
+      let hdir = td;
+      if (pose.arch) {
+        const back = [-f[0], -f[1]];
+        const mid = [(j.hip[0] + j.sh[0]) / 2 + back[0] * pose.arch, (j.hip[1] + j.sh[1]) / 2 + back[1] * pose.arch];
+        part([j.hip, mid, j.sh], [R.torsoHip, (R.torsoHip + R.torsoSh) / 2, R.torsoSh]);
+        const hv = [j.sh[0] - mid[0], j.sh[1] - mid[1]], hl2 = Math.hypot(hv[0], hv[1]) || 1;
+        hdir = [hv[0] / hl2, hv[1] / hl2];
+      } else part([j.hip, j.sh], [R.torsoHip, R.torsoSh]);
       const hd = R.torsoSh + R.gap + R.head;
-      disc([j.sh[0] + td[0] * hd + f[0] * 2, j.sh[1] + td[1] * hd + f[1] * 2], R.head, F.fill);
+      disc([j.sh[0] + hdir[0] * hd + f[0] * 2, j.sh[1] + hdir[1] * hd + f[1] * 2], R.head, F.fill);
       // lado da frente
       part([j.hip, j.kN, j.ankN, j.toeN], legR);
       part([j.sh, j.eN, j.hN], armR);
