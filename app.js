@@ -6,7 +6,7 @@
    ========================================================= */
 
 const STORAGE_KEY = 'meu-treino:v1';
-const REST_SECONDS = 90;
+const REST_SECONDS = 40; // descanso entre séries, igual para todos os exercícios
 const DEFAULT_GOALS = { workouts: 5, minutes: 300, sets: 100 };
 const PLAN_VERSION = 2;
 
@@ -389,8 +389,9 @@ function viewResumo() {
 
 /** "Antes de começar": aquecimento com botão Ver em cada exercício + cuidados da rotina. */
 function noteCard(note) {
-  const hasWarm = note.startsWith('Aquecimento');
-  const extra = hasWarm ? note.replace(WARMUP, '').trim() : note;
+  // o aquecimento aparece em todo treino (rotinas, treino livre e rotinas novas)
+  const hasWarm = true;
+  const extra = note.replace(WARMUP, '').replace(/^Aquecimento[^.]*\./, '').trim();
   return `
     <div class="card note">
       <p class="eyebrow c-cyan">Antes de começar</p>
@@ -447,7 +448,7 @@ function viewLive() {
         <div><div class="value c-pink">${cur.exercises.length}</div><div class="label">Exercícios</div></div>
       </div>
     </div>
-    ${cur.note ? noteCard(cur.note) : '<div class="spacer"></div>'}
+    ${noteCard(cur.note || '')}
 
     ${cur.exercises.map((ex, ei) => {
       const prev = lastPerformance(ex.name);
