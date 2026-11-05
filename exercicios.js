@@ -364,8 +364,8 @@
       title: 'Alongamento de flexores do quadril', hl: ['leg', 'torso'],
       props: [],
       poses: [
-        P({ hip: [98, 118], torso: 0, fN: [56, 150], fF: [132, 150], kN: 1, kF: -1, ftN: 270, ftF: 90, aN: [-25, 60], aF: [-28, 58] }),
-        P({ hip: [110, 124], torso: -6, fN: [56, 150], fF: [132, 150], kN: 1, kF: -1, ftN: 270, ftF: 90, aN: [-31, 54], aF: [-34, 52] }),
+        P({ hip: [98, 118], torso: 0, lN: [-14, 270], fF: [132, 150], kF: -1, ftN: 272, ftF: 90, aN: [-25, 60], aF: [-28, 58] }),
+        P({ hip: [110, 124], torso: -6, lN: [-38.6, 270], fF: [132, 150], kF: -1, ftN: 272, ftF: 90, aN: [-31, 54], aF: [-34, 52] }),
       ],
       tips: ['Um joelho no chão (use uma toalha) e o outro pé à frente.', 'Contraia o glúteo da perna de trás e leve o quadril um pouco à frente.', 'Tronco alto, sem arquear a lombar. Segure e troque o lado.'],
     },
