@@ -23,7 +23,7 @@ Visual limpo inspirado nos apps de fitness do iOS: fundo escuro (ou claro, confo
 - **Rotinas**: edite seus treinos fixos (um exercício por linha) e ajuste as metas semanais.
 - **Backup**: exporte/importe seus dados em JSON.
 
-Os dados ficam salvos **no próprio aparelho** (localStorage). Funciona offline e pode ser instalado na tela inicial.
+Os dados ficam salvos no aparelho e, quando aberto pelo link do Claude, também na sua conta (banco privado por pessoa), para não se perderem. Funciona offline e pode ser instalado na tela inicial.
 
 ## Como usar
 

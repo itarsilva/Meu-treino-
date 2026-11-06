@@ -201,8 +201,120 @@ function load() {
 }
 
 function save() {
+  state.updatedAt = Date.now();
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* ignora */ }
+  if (typeof Cloud !== 'undefined') Cloud.schedule();
 }
+
+/* ---------- Conta: guarda os dados no banco do Claude (privado por pessoa) ----------
+   Documentos em data/users/<id>/: "meta" (rotinas, metas, peso, treino em andamento)
+   e um documento por mês com os treinos ("w-2026-11"). O navegador fica como cópia local. */
+const Cloud = (() => {
+  let db = null, uid = null, ready = false, timer = null, chain = Promise.resolve();
+  let status = 'local'; // local | syncing | cloud | error
+  const pushed = {};
+  const monthKey = (iso) => 'w-' + String(iso).slice(0, 7);
+  const ref = (k) => db.doc(`data/users/${uid}/${k}`);
+
+  function metaBody() {
+    const { workouts, ...rest } = state;
+    return JSON.parse(JSON.stringify(rest));
+  }
+
+  function merge(docs) {
+    let meta = null; const remoteW = [];
+    docs.forEach((d) => {
+      const b = d.data() || {};
+      if (d.id === 'meta') meta = b;
+      else if (d.id.startsWith('w-') && Array.isArray(b.items)) { remoteW.push(...b.items); pushed[d.id] = JSON.stringify(b); }
+    });
+    if (meta) pushed.meta = JSON.stringify(meta);
+    const delW = new Set([...(state.deleted?.workouts || []), ...(meta?.deleted?.workouts || [])]);
+    const delB = new Set([...(state.deleted?.body || []), ...(meta?.deleted?.body || [])]);
+    const byId = new Map();
+    [...remoteW, ...state.workouts].forEach((w) => { if (w && w.id && !delW.has(w.id)) byId.set(w.id, w); });
+    const bodyById = new Map();
+    [...(meta?.body || []), ...(state.body || [])].forEach((e) => { if (e && e.id && !delB.has(e.id)) bodyById.set(e.id, e); });
+    // rotinas, metas e treino em andamento: vale a versão salva por último
+    const base = meta && (meta.updatedAt || 0) > (state.updatedAt || 0)
+      ? { ...state, routines: meta.routines ?? state.routines, goals: { ...state.goals, ...meta.goals }, prefs: { ...state.prefs, ...meta.prefs }, current: meta.current ?? null, plan: meta.plan ?? state.plan, updatedAt: meta.updatedAt }
+      : state;
+    state = {
+      ...base,
+      workouts: [...byId.values()].sort((a, b) => new Date(a.date) - new Date(b.date)),
+      body: [...bodyById.values()],
+      deleted: { workouts: [...delW], body: [...delB] },
+    };
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* ignora */ }
+  }
+
+  async function pushAll() {
+    if (!ready) return;
+    const jobs = [];
+    const meta = metaBody(), mj = JSON.stringify(meta);
+    if (pushed.meta !== mj) jobs.push(['meta', meta, mj]);
+    const months = {};
+    state.workouts.forEach((w) => { (months[monthKey(w.date)] = months[monthKey(w.date)] || []).push(w); });
+    const keys = new Set([...Object.keys(months), ...Object.keys(pushed).filter((k) => k.startsWith('w-'))]);
+    keys.forEach((k) => { const body = { items: months[k] || [] }, j = JSON.stringify(body); if (pushed[k] !== j) jobs.push([k, body, j]); });
+    if (!jobs.length) { status = 'cloud'; return; }
+    status = 'syncing'; paintStatus();
+    for (const [k, body, j] of jobs) { await ref(k).set(body); pushed[k] = j; } // um documento por vez
+    status = 'cloud'; paintStatus();
+  }
+
+  function run() {
+    chain = chain.then(pushAll).catch((e) => {
+      status = 'error'; paintStatus();
+      if (e && e.code === 'unavailable') setTimeout(schedule, 4000 + Math.random() * 3000);
+    });
+    return chain;
+  }
+
+  function schedule() {
+    if (!ready) return;
+    clearTimeout(timer);
+    timer = setTimeout(run, 1200);
+  }
+
+  function paintStatus() {
+    const el = document.getElementById('sync-status');
+    if (el) el.innerHTML = statusText();
+  }
+  function statusText() {
+    return status === 'cloud' ? '☁︎ Salvo na sua conta Claude. Seus treinos não se perdem se o celular apagar os dados.'
+      : status === 'syncing' ? 'Salvando na sua conta…'
+      : status === 'error' ? 'Não consegui salvar na conta agora. Seus dados estão neste aparelho e tento de novo sozinho.'
+      : 'Salvo só neste aparelho. Exporte um backup de vez em quando para não perder nada.';
+  }
+
+  async function init() {
+    try {
+      const c = window.claude;
+      if (!c || typeof c.use !== 'function') return;
+      const [d, user] = await Promise.all([c.use('db'), c.use('user')]);
+      if (!d || !user) return;
+      const id = await user.id();
+      if (!id) return;
+      db = d; uid = id;
+      status = 'syncing'; paintStatus();
+      const snap = await db.collection(`data/users/${uid}`).get();
+      const hadRemote = snap.docs.length > 0;
+      merge(snap.docs);
+      ready = true;
+      render();
+      await run();
+      if (!hadRemote && (state.workouts.length || state.body.length)) toast('Seus treinos agora ficam salvos na sua conta ☁︎', 3500);
+    } catch (e) {
+      status = 'local'; paintStatus();
+    }
+  }
+
+  // ao sair do app, envia na hora o que falta
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && ready) { clearTimeout(timer); run(); } });
+
+  return { init, schedule, statusText };
+})();
 
 /* ---------- Utilidades ---------- */
 
@@ -921,7 +1033,7 @@ function viewRotinas() {
         <span class="chev">${ICON.chevron}</span>
       </button>
     </div>
-    <p class="tiny muted" style="margin:0 4px">Seus dados ficam só neste aparelho. Exportar baixa um arquivo e copia o backup; guarde numa nota para não perder nada.</p>
+    <p class="tiny muted" style="margin:0 4px" id="sync-status">${Cloud.statusText()}</p>
   `;
 }
 
@@ -1044,6 +1156,15 @@ const actions = {
     }
     save(); render();
     if (nextOpen >= 0) setTimeout(() => scrollToEx(nextOpen), 350);
+    const allDone = set.done && cur.exercises.length > 0 && cur.exercises.every((e) => e.sets.length && e.sets.every((x) => x.done));
+    if (allDone) {
+      Feedback.vibrate([120, 70, 120]);
+      setTimeout(() => openSheet(`
+        <p class="sheet-msg"><strong style="font-size:17px;color:var(--text)">Treino completo! 🎉</strong><br>Todas as séries feitas. Finalize para salvar no histórico.</p>
+        <button class="sheet-btn" data-sheet="finish" style="color:var(--green);font-weight:700">Finalizar e salvar</button>`,
+        (v) => { if (v === 'finish') finishWorkout(); }, 'Agora não'), 250);
+      return;
+    }
     if (set.done) {
       startTimer();
       const ex = state.current.exercises[+el.dataset.ei];
@@ -1067,6 +1188,8 @@ const actions = {
   'delete-workout': async (el) => {
     if (!await ask('Excluir este treino do histórico?', 'Excluir treino')) return;
     state.workouts = state.workouts.filter((w) => w.id !== el.dataset.id);
+    state.deleted = { workouts: [], body: [], ...state.deleted };
+    state.deleted.workouts = [...state.deleted.workouts, el.dataset.id];
     save(); render();
   },
   demo: (el) => showDemo(el.dataset.name, el.dataset.dose),
@@ -1098,6 +1221,8 @@ const actions = {
   'delete-body': async (el) => {
     if (!await ask('Excluir este registro de peso e medidas?', 'Excluir registro')) return;
     state.body = state.body.filter((e) => e.id !== el.dataset.id);
+    state.deleted = { workouts: [], body: [], ...state.deleted };
+    state.deleted.body = [...state.deleted.body, el.dataset.id];
     save(); render();
   },
   'load-plan': async () => {
@@ -1420,6 +1545,7 @@ document.addEventListener('change', (e) => {
 /* ---------- Início ---------- */
 
 render();
+Cloud.init();
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
