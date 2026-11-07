@@ -343,8 +343,36 @@ const Cloud = (() => {
   // ao sair do app, envia na hora o que falta
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && ready) { clearTimeout(timer); run(); } });
 
-  return { init, schedule, statusText, banner };
+  /** Diagnóstico num documento à parte; nunca atrapalha o salvamento dos treinos. */
+  function writeDebug(body) {
+    if (!ready) return;
+    chain = chain.then(() => ref('debug').set(body)).catch(() => {});
+  }
+
+  return { init, schedule, statusText, banner, writeDebug };
 })();
+
+/* ---------- Diagnóstico: últimos toques e erros, gravados na conta para o Claude ler ---------- */
+const Debug = (() => {
+  const entries = [];
+  let timer = null;
+  function push(kind, msg) {
+    entries.push({ t: new Date().toISOString(), kind, msg: String(msg).slice(0, 300) });
+    if (entries.length > 40) entries.shift();
+    clearTimeout(timer);
+    timer = setTimeout(() => Cloud.writeDebug({
+      entries: entries.slice(),
+      ua: navigator.userAgent, vw: innerWidth, vh: innerHeight,
+      dh: document.documentElement.scrollHeight, tab, at: new Date().toISOString(),
+    }), 2500);
+  }
+  return {
+    log: push,
+    error: (where, err) => push('erro', `${where}: ${(err && (err.stack || err.message)) || err}`),
+  };
+})();
+window.addEventListener('error', (e) => Debug.error('janela', `${e.message} @${e.lineno}:${e.colno}`));
+window.addEventListener('unhandledrejection', (e) => Debug.error('promessa', e.reason && (e.reason.code || e.reason.message || e.reason)));
 
 /* ---------- Utilidades ---------- */
 
@@ -1552,12 +1580,44 @@ setInterval(() => {
 
 /* ---------- Eventos ---------- */
 
+function handleTap(target, via) {
+  const tabBtn = target.closest('[data-tab]');
+  if (tabBtn) { Debug.log('tap', `${via} aba ${tabBtn.dataset.tab}`); tab = tabBtn.dataset.tab; render(); window.scrollTo(0, 0); return true; }
+  const el = target.closest('button[data-action]');
+  if (el && actions[el.dataset.action]) {
+    Debug.log('tap', `${via} ${el.dataset.action}${el.dataset.ei != null ? ' ei=' + el.dataset.ei : ''}${el.dataset.si != null ? ' si=' + el.dataset.si : ''}`);
+    try {
+      const r = actions[el.dataset.action](el);
+      if (r && typeof r.catch === 'function') r.catch((err) => Debug.error('ação ' + el.dataset.action, err));
+    } catch (err) { Debug.error('ação ' + el.dataset.action, err); toast('Algo deu errado. Tente de novo.'); }
+    return true;
+  }
+  if (target.closest('#timer')) { actions['timer-expand'](); return true; }
+  return false;
+}
+
+// No app do Claude no iPhone o "click" às vezes não chega: o toque age ao tirar o dedo,
+// e o click que vem logo depois é ignorado para não repetir a ação.
+let tapDown = null, lastTapAt = 0;
+const TAPPABLE = 'button, [data-tab], #timer';
+document.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'mouse') { tapDown = null; return; }
+  const el = e.target.closest(TAPPABLE);
+  tapDown = el ? { x: e.clientX, y: e.clientY, t: Date.now(), el } : null;
+}, { passive: true, capture: true });
+document.addEventListener('pointercancel', () => { tapDown = null; }, { capture: true });
+document.addEventListener('pointerup', (e) => {
+  const d = tapDown; tapDown = null;
+  if (!d || e.pointerType === 'mouse') return;
+  const el = e.target.closest(TAPPABLE) || document.elementFromPoint(e.clientX, e.clientY)?.closest(TAPPABLE);
+  const moved = Math.hypot(e.clientX - d.x, e.clientY - d.y);
+  if (el !== d.el || moved > 12 || Date.now() - d.t > 900) return; // foi rolagem ou toque longo
+  if (handleTap(el, 'toque')) lastTapAt = Date.now();
+}, { capture: true });
+
 document.addEventListener('click', (e) => {
-  const tabBtn = e.target.closest('[data-tab]');
-  if (tabBtn) { tab = tabBtn.dataset.tab; render(); window.scrollTo(0, 0); return; }
-  const el = e.target.closest('button[data-action]');
-  if (el && actions[el.dataset.action]) { actions[el.dataset.action](el); return; }
-  if (e.target.closest('#timer')) actions['timer-expand']();
+  if (Date.now() - lastTapAt < 700) return; // já tratado pelo toque
+  handleTap(e.target, 'clique');
 });
 
 document.addEventListener('keydown', (e) => {
