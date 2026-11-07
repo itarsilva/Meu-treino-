@@ -267,7 +267,9 @@ const Cloud = (() => {
 
   function run() {
     chain = chain.then(pushAll).catch((e) => {
-      status = 'error'; reason = 'erro: ' + ((e && (e.code || e.message)) || 'desconhecido'); paintStatus();
+      status = 'error';
+      reason = e && e.code === 'invalid_argument' ? 'view-only' : 'erro: ' + ((e && (e.code || e.message)) || 'desconhecido');
+      paintStatus();
       if (e && e.code === 'unavailable') setTimeout(schedule, 4000 + Math.random() * 3000);
     });
     return chain;
@@ -291,6 +293,7 @@ const Cloud = (() => {
     'no-db': 'O Claude não liberou o armazenamento da conta nesta tela.',
     'no-user': 'Não encontrei sua conta Claude conectada nesta tela.',
     'no-id': 'Sua conta não está conectada (faça login no Claude).',
+    'view-only': 'Esta conta só pode ver o app ("Can view"). Entre no Claude com a conta dona do app para salvar seus treinos.',
   };
   /** Aviso no topo do Histórico: salvo na conta ou por que não. */
   function banner() {
