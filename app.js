@@ -682,6 +682,15 @@ function switchCard(cur) {
     </div>`;
 }
 
+/** "Sábado, 7 de nov. · 18:05 às 19:02" — início guardado ou calculado pela duração. */
+function whenLabel(w) {
+  const end = new Date(w.date);
+  const start = w.startedAt ? new Date(w.startedAt) : new Date(end - (w.duration || 0) * 60000);
+  const day = end.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'short', year: end.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
+  const hm = (d) => d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return `${day.charAt(0).toUpperCase() + day.slice(1)} · ${hm(start)} às ${hm(end)}`;
+}
+
 function viewHistorico() {
   if (!state.workouts.length) {
     return header('Histórico') + emptyState(ICON.history, 'var(--pink)', 'Nenhum treino ainda', 'Finalize um treino e ele aparece aqui.');
@@ -704,11 +713,11 @@ function viewHistorico() {
               <span class="icon-badge">${ICON.dumbbell}</span>
               <span class="body">
                 <span class="title" style="display:block">${esc(w.name)}</span>
+                <span class="hist-when">${esc(whenLabel(w))}</span>
                 <span class="small muted">${w.duration} min · ${plural(doneSets(w), 'série', 'séries')}</span>
               </span>
               <span class="trailing">
                 <span class="value c-green" style="display:block">${fmtNum(volume(w))} kg</span>
-                <span class="tiny muted">${fmtDate(w.date)}</span>
               </span>
             </summary>
             <div class="history-detail">
@@ -1068,7 +1077,7 @@ function finishWorkout() {
   let duration = minutesBetween(cur.startedAt, now);
   // treino esquecido aberto: estima pelo número de séries (~2,5 min cada)
   if (duration > 240) duration = Math.max(20, Math.round(exercises.reduce((a, e) => a + e.sets.filter((x) => x.done).length, 0) * 2.5));
-  state.workouts.push({ id: uid(), name: cur.name, routineId: cur.routineId || null, date: now, duration, exercises });
+  state.workouts.push({ id: uid(), name: cur.name, routineId: cur.routineId || null, date: now, startedAt: duration === minutesBetween(cur.startedAt, now) ? cur.startedAt : null, duration, exercises });
   state.current = null;
   stopTimer();
   save();
@@ -1133,7 +1142,7 @@ const actions = {
         const now = new Date().toISOString();
         let duration = minutesBetween(cur.startedAt, now);
         if (duration > 240) duration = Math.max(20, Math.round(doneSets(cur) * 2.5));
-        state.workouts.push({ id: uid(), name: cur.name, routineId: cur.routineId || null, date: now, duration, exercises });
+        state.workouts.push({ id: uid(), name: cur.name, routineId: cur.routineId || null, date: now, startedAt: duration === minutesBetween(cur.startedAt, now) ? cur.startedAt : null, duration, exercises });
       }
       state.current = null; stopTimer();
       startWorkout(r);

@@ -535,3 +535,5 @@ details.routine-edit[open] > summary { margin-bottom: 6px; }
 .rb-min { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 16px; font-weight: 600; padding: 10px 16px; }
 body.resting { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .rest-big.ending .rest-big-num { animation: none; } }
+
+.hist-when { display: block; font-size: 14px; font-weight: 600; color: var(--cyan); margin: 1px 0; }
