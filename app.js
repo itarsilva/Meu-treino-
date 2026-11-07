@@ -212,6 +212,8 @@ function save() {
 const Cloud = (() => {
   let db = null, uid = null, ready = false, timer = null, chain = Promise.resolve();
   let status = 'local'; // local | syncing | cloud | error
+  let reason = 'starting'; // por que não está salvando na conta
+  let lastSaved = 0;
   const pushed = {};
   const monthKey = (iso) => 'w-' + String(iso).slice(0, 7);
   const ref = (k) => db.doc(`data/users/${uid}/${k}`);
@@ -257,15 +259,15 @@ const Cloud = (() => {
     state.workouts.forEach((w) => { (months[monthKey(w.date)] = months[monthKey(w.date)] || []).push(w); });
     const keys = new Set([...Object.keys(months), ...Object.keys(pushed).filter((k) => k.startsWith('w-'))]);
     keys.forEach((k) => { const body = { items: months[k] || [] }, j = JSON.stringify(body); if (pushed[k] !== j) jobs.push([k, body, j]); });
-    if (!jobs.length) { status = 'cloud'; return; }
+    if (!jobs.length) { status = 'cloud'; lastSaved = lastSaved || Date.now(); paintStatus(); return; }
     status = 'syncing'; paintStatus();
     for (const [k, body, j] of jobs) { await ref(k).set(body); pushed[k] = j; } // um documento por vez
-    status = 'cloud'; paintStatus();
+    status = 'cloud'; lastSaved = Date.now(); paintStatus();
   }
 
   function run() {
     chain = chain.then(pushAll).catch((e) => {
-      status = 'error'; paintStatus();
+      status = 'error'; reason = 'erro: ' + ((e && (e.code || e.message)) || 'desconhecido'); paintStatus();
       if (e && e.code === 'unavailable') setTimeout(schedule, 4000 + Math.random() * 3000);
     });
     return chain;
@@ -280,6 +282,28 @@ const Cloud = (() => {
   function paintStatus() {
     const el = document.getElementById('sync-status');
     if (el) el.innerHTML = statusText();
+    const b = document.getElementById('sync-banner');
+    if (b) b.outerHTML = banner();
+  }
+  const REASONS = {
+    starting: 'Conectando à sua conta…',
+    'no-claude': 'O app foi aberto fora do Claude, então não há conta para salvar.',
+    'no-db': 'O Claude não liberou o armazenamento da conta nesta tela.',
+    'no-user': 'Não encontrei sua conta Claude conectada nesta tela.',
+    'no-id': 'Sua conta não está conectada (faça login no Claude).',
+  };
+  /** Aviso no topo do Histórico: salvo na conta ou por que não. */
+  function banner() {
+    if (status === 'cloud') {
+      const t = lastSaved ? new Date(lastSaved).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+      return `<p class="sync-ok" id="sync-banner">☁︎ Salvo na sua conta Claude${t ? ` · ${t}` : ''}</p>`;
+    }
+    if (status === 'syncing' || reason === 'starting') return `<p class="sync-ok muted" id="sync-banner">Conectando à sua conta…</p>`;
+    const why = REASONS[reason] || `Erro ao salvar na conta (${esc(reason)}).`;
+    return `<div class="card sync-warn" id="sync-banner">
+      <p class="small"><strong>⚠︎ Os treinos estão salvos só neste celular.</strong> ${why}</p>
+      <p class="tiny muted">Código: ${esc(reason)}. Mande um print para o Claude que ele resolve. Enquanto isso, use Exportar backup em Rotinas.</p>
+    </div>`;
   }
   function statusText() {
     return status === 'cloud' ? '☁︎ Salvo na sua conta Claude. Seus treinos não se perdem se o celular apagar os dados.'
@@ -291,11 +315,13 @@ const Cloud = (() => {
   async function init() {
     try {
       const c = window.claude;
-      if (!c || typeof c.use !== 'function') return;
+      const fail = (r) => { reason = r; status = 'local'; paintStatus(); };
+      if (!c || typeof c.use !== 'function') return fail('no-claude');
       const [d, user] = await Promise.all([c.use('db'), c.use('user')]);
-      if (!d || !user) return;
+      if (!d) return fail('no-db');
+      if (!user) return fail('no-user');
       const id = await user.id();
-      if (!id) return;
+      if (!id) return fail('no-id');
       db = d; uid = id;
       status = 'syncing'; paintStatus();
       const snap = await db.collection(`data/users/${uid}`).get();
@@ -306,14 +332,15 @@ const Cloud = (() => {
       await run();
       if (!hadRemote && (state.workouts.length || state.body.length)) toast('Seus treinos agora ficam salvos na sua conta ☁︎', 3500);
     } catch (e) {
-      status = 'local'; paintStatus();
+      reason = 'erro: ' + ((e && (e.code || e.message)) || 'desconhecido');
+      status = 'error'; paintStatus();
     }
   }
 
   // ao sair do app, envia na hora o que falta
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && ready) { clearTimeout(timer); run(); } });
 
-  return { init, schedule, statusText };
+  return { init, schedule, statusText, banner };
 })();
 
 /* ---------- Utilidades ---------- */
@@ -691,9 +718,26 @@ function whenLabel(w) {
   return `${day.charAt(0).toUpperCase() + day.slice(1)} · ${hm(start)} às ${hm(end)}`;
 }
 
+function inProgressCard() {
+  const cur = state.current;
+  if (!cur) return '';
+  const t = new Date(cur.startedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const d = new Date(cur.startedAt).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'short' });
+  return `
+    <div class="card in-progress">
+      <p class="eyebrow c-yellow">Em andamento · ainda não está no histórico</p>
+      <p class="fold-title">${esc(cur.name)}</p>
+      <p class="tiny muted">Começou ${esc(d)} às ${t} · ${plural(doneSets(cur), 'série feita', 'séries feitas')}</p>
+      <div class="row" style="margin-top:10px">
+        <button class="pill-btn go grow" data-action="finish">Finalizar e salvar</button>
+        <button class="pill-btn grow" data-tab="treino">Continuar</button>
+      </div>
+    </div>`;
+}
+
 function viewHistorico() {
   if (!state.workouts.length) {
-    return header('Histórico') + emptyState(ICON.history, 'var(--pink)', 'Nenhum treino ainda', 'Finalize um treino e ele aparece aqui.');
+    return header('Histórico') + Cloud.banner() + inProgressCard() + emptyState(ICON.history, 'var(--pink)', 'Nenhum treino ainda', 'Finalize um treino e ele aparece aqui.');
   }
   const groups = new Map();
   [...state.workouts].reverse().forEach((w) => {
@@ -704,6 +748,8 @@ function viewHistorico() {
 
   return `
     ${header('Histórico', plural(state.workouts.length, 'treino', 'treinos'))}
+    ${Cloud.banner()}
+    ${inProgressCard()}
     ${[...groups].map(([month, list]) => `
       <p class="section-label">${esc(month)}</p>
       <div class="list">
@@ -1553,8 +1599,25 @@ document.addEventListener('change', (e) => {
 
 /* ---------- Início ---------- */
 
+/** Treino aberto há mais de 4 h com séries feitas: salva no histórico automaticamente. */
+function autoSaveStale() {
+  const cur = state.current;
+  if (!cur || (Date.now() - new Date(cur.startedAt)) / 36e5 < 4) return false;
+  const exercises = cur.exercises.filter((e) => e.sets.some((x) => x.done));
+  if (!exercises.length) return false;
+  const duration = Math.max(20, Math.round(doneSets(cur) * 2.5));
+  const end = new Date(new Date(cur.startedAt).getTime() + duration * 60000).toISOString();
+  state.workouts.push({ id: uid(), name: cur.name, routineId: cur.routineId || null, date: end, startedAt: cur.startedAt, duration, exercises, auto: true });
+  state.workouts.sort((a, b) => new Date(a.date) - new Date(b.date));
+  state.current = null;
+  save();
+  toast(`O treino "${cur.name}" ficou aberto e foi salvo no histórico.`, 4500);
+  return true;
+}
+
+autoSaveStale();
 render();
-Cloud.init();
+Cloud.init().then(() => { if (autoSaveStale()) render(); });
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});

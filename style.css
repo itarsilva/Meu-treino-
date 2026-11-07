@@ -537,3 +537,10 @@ body.resting { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .rest-big.ending .rest-big-num { animation: none; } }
 
 .hist-when { display: block; font-size: 14px; font-weight: 600; color: var(--cyan); margin: 1px 0; }
+
+/* ---------- Status de salvamento / treino em andamento ---------- */
+.sync-ok { font-size: 13px; font-weight: 600; color: var(--green); margin: -12px 4px 14px; }
+.sync-ok.muted { color: var(--muted); }
+.sync-warn { display: grid; gap: 6px; border: 1px solid color-mix(in srgb, var(--yellow) 45%, transparent); background: color-mix(in srgb, var(--yellow) 10%, var(--surface)); }
+.in-progress { border: 1px solid color-mix(in srgb, var(--yellow) 35%, transparent); }
+.in-progress .pill-btn { min-height: 40px; }
