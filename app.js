@@ -226,7 +226,8 @@ const Cloud = (() => {
   function merge(docs) {
     let meta = null; const remoteW = [];
     docs.forEach((d) => {
-      const b = d.data() || {};
+      // os dados da conta chegam congelados (só leitura): trabalha sempre numa cópia editável
+      const b = JSON.parse(JSON.stringify(d.data() || {}));
       if (d.id === 'meta') meta = b;
       else if (d.id.startsWith('w-') && Array.isArray(b.items)) { remoteW.push(...b.items); pushed[d.id] = JSON.stringify(b); }
     });
